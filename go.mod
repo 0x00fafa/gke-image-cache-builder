@@ -1,10 +1,11 @@
-module github.com/ai-on-gke/tools/gke-image-cache-builder
+module github.com/0x00fafa/gke-image-cache-builder
 
 go 1.21
 
 require (
 	golang.org/x/oauth2 v0.15.0
 	google.golang.org/api v0.153.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

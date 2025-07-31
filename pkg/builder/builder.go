@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/auth"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/disk"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/image"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/vm"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/config"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/gcp"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/auth"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/image"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/vm"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
 // Builder handles the image cache creation process
@@ -55,7 +55,7 @@ func NewBuilder(cfg *config.Config) (*Builder, error) {
 // BuildImageCache orchestrates the entire image cache creation process
 func (b *Builder) BuildImageCache(ctx context.Context) error {
 	b.logger.Info("Starting image cache build process")
-	b.logger.Infof("Disk image name: %s", b.config.DiskImageName) // 修改字段名
+	b.logger.Infof("Disk image name: %s", b.config.DiskImageName)
 	b.logger.Infof("Container images: %v", b.config.ContainerImages)
 
 	workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache)

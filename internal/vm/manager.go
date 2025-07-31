@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/scripts"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/gcp"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/scripts"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
 // Manager handles VM lifecycle operations

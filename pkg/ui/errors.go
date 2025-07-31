@@ -22,6 +22,12 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 	errorMsg := err.Error()
 
 	switch {
+	case strings.Contains(errorMsg, "configuration file not found"):
+		e.showConfigFileNotFoundError(err)
+	case strings.Contains(errorMsg, "failed to parse YAML"):
+		e.showYAMLParseError(err)
+	case strings.Contains(errorMsg, "configuration validation failed"):
+		e.showConfigValidationError(err)
 	case strings.Contains(errorMsg, "execution mode"):
 		e.showExecutionModeError()
 	case strings.Contains(errorMsg, "zone") && strings.Contains(errorMsg, "required"):
@@ -30,15 +36,95 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 		e.showLocalModeEnvironmentError()
 	case strings.Contains(errorMsg, "project-name"):
 		e.showProjectNameError()
-	case strings.Contains(errorMsg, "cache-name"):
-		e.showCacheNameError()
+	case strings.Contains(errorMsg, "disk-image-name"):
+		e.showDiskImageNameError()
 	case strings.Contains(errorMsg, "container-image"):
 		e.showContainerImageError()
-	case strings.Contains(errorMsg, "disk-image-name"): // 修改错误匹配
-		e.showDiskImageNameError() // 修改函数名
+	case strings.Contains(errorMsg, "invalid machine type"):
+		e.showMachineTypeError(err)
+	case strings.Contains(errorMsg, "invalid disk type"):
+		e.showDiskTypeError(err)
 	default:
 		e.showGenericError(err)
 	}
+}
+
+func (e *ErrorHandler) showConfigFileNotFoundError(err error) {
+	fmt.Printf(`Error: Configuration file not found
+
+%v
+
+SOLUTIONS:
+    1. Check the file path and ensure the file exists
+    2. Generate a configuration template:
+       %s --generate-config basic --output my-config.yaml
+    3. Use command line parameters instead:
+       %s -L --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>
+
+EXAMPLES:
+    # Generate and use a basic template
+    %s --generate-config basic --output web-app.yaml
+    %s --config web-app.yaml
+
+For configuration help: %s --help-config
+`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
+		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showYAMLParseError(err error) {
+	fmt.Printf(`Error: YAML configuration file parsing failed
+
+%v
+
+SOLUTIONS:
+    1. Check YAML syntax (indentation, colons, quotes)
+    2. Validate the configuration file:
+       %s --validate-config <CONFIG_FILE>
+    3. Generate a new template:
+       %s --generate-config basic --output new-config.yaml
+
+COMMON YAML ISSUES:
+    • Incorrect indentation (use spaces, not tabs)
+    • Missing colons after keys
+    • Unquoted special characters
+    • Inconsistent list formatting
+
+EXAMPLE VALID YAML:
+    execution:
+      mode: local
+    project:
+      name: my-project
+    images:
+      - nginx:latest
+      - redis:alpine
+
+For configuration help: %s --help-config
+`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showConfigValidationError(err error) {
+	fmt.Printf(`Error: Configuration validation failed
+
+%v
+
+SOLUTIONS:
+    1. Check required fields in your configuration file
+    2. Validate configuration syntax:
+       %s --validate-config <CONFIG_FILE>
+    3. Review configuration examples:
+       %s --help-config
+    4. Generate a working template:
+       %s --generate-config basic
+
+REQUIRED CONFIGURATION:
+    execution.mode: local or remote
+    project.name: your-gcp-project
+    cache.name: your-cache-name
+    images: [list of container images]
+
+For configuration help: %s --help-config
+`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
+		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showExecutionModeError() {
@@ -183,6 +269,58 @@ EXAMPLES:
 FULL EXAMPLE:
     %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
 `, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showMachineTypeError(err error) {
+	fmt.Printf(`Error: Invalid machine type
+
+%v
+
+SOLUTIONS:
+    Use a supported machine type in your configuration or command line:
+    
+    SUPPORTED MACHINE TYPES:
+    • e2-standard-2, e2-standard-4, e2-standard-8, e2-standard-16
+    • e2-highmem-2, e2-highmem-4, e2-highmem-8, e2-highmem-16  
+    • e2-highcpu-2, e2-highcpu-4, e2-highcpu-8, e2-highcpu-16
+    • n1-standard-1, n1-standard-2, n1-standard-4, n1-standard-8
+    • n2-standard-2, n2-standard-4, n2-standard-8, n2-standard-16
+
+EXAMPLES:
+    # Command line
+    --machine-type=e2-standard-4
+    
+    # Configuration file
+    advanced:
+      machine_type: e2-standard-4
+
+For configuration help: %s --help-config
+`, err, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showDiskTypeError(err error) {
+	fmt.Printf(`Error: Invalid disk type
+
+%v
+
+SOLUTIONS:
+    Use a supported disk type in your configuration or command line:
+    
+    SUPPORTED DISK TYPES:
+    • pd-standard  (Standard persistent disk - cost-effective)
+    • pd-ssd       (SSD persistent disk - high performance)
+    • pd-balanced  (Balanced persistent disk - good performance/cost ratio)
+
+EXAMPLES:
+    # Command line
+    --disk-type=pd-ssd
+    
+    # Configuration file
+    cache:
+      disk_type: pd-ssd
+
+For configuration help: %s --help-config
+`, err, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showGenericError(err error) {

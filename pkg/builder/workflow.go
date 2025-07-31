@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/disk"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/image"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/vm"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/config"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/image"
+	"github.com/0x00fafa/gke-image-cache-builder/internal/vm"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
 // Workflow manages the step-by-step execution of image cache building

@@ -7,13 +7,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/builder"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/config"
-	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/ui"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/builder"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/ui"
 )
 
 var (
-	version   = "2.0.0"
+	version   = "1.0.0"
 	buildTime = "unknown"
 	gitCommit = "unknown"
 )
@@ -28,6 +28,15 @@ func main() {
 	cfg := config.NewConfig()
 	errorHandler := ui.NewErrorHandler()
 
+	// Configuration file support
+	configFile := flag.String("config", "", "Path to YAML configuration file")
+	flag.StringVar(configFile, "c", "", "Path to YAML configuration file (short form)")
+
+	// Config generation and validation
+	generateConfig := flag.String("generate-config", "", "Generate configuration template (basic|advanced|ci-cd|ml)")
+	generateOutput := flag.String("output", "", "Output path for generated config (default: stdout)")
+	validateConfig := flag.String("validate-config", "", "Validate YAML configuration file")
+
 	// Define execution mode flags (mutually exclusive)
 	localMode := flag.Bool("L", false, "Execute on current GCP VM (local mode)")
 	flag.BoolVar(localMode, "local-mode", false, "Execute on current GCP VM (local mode)")
@@ -37,7 +46,7 @@ func main() {
 
 	// Required parameters
 	flag.StringVar(&cfg.ProjectName, "project-name", "", "GCP project name")
-	flag.StringVar(&cfg.DiskImageName, "disk-image-name", "", "Name for the disk image") // 修改参数名
+	flag.StringVar(&cfg.DiskImageName, "disk-image-name", "", "Name for the disk image")
 
 	// Container images (repeatable)
 	var containerImages stringSlice
@@ -82,9 +91,28 @@ func main() {
 	// Help options
 	helpFull := flag.Bool("help-full", false, "Show complete help")
 	helpExamples := flag.Bool("help-examples", false, "Show usage examples")
+	helpConfig := flag.Bool("help-config", false, "Show configuration file help")
 	showVersion := flag.Bool("version", false, "Show version information")
 
 	flag.Parse()
+
+	// Handle special commands first
+	if *generateConfig != "" {
+		if err := handleGenerateConfig(*generateConfig, *generateOutput); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to generate config: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *validateConfig != "" {
+		if err := config.ValidateYAMLFile(*validateConfig); err != nil {
+			fmt.Fprintf(os.Stderr, "Configuration validation failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Configuration file '%s' is valid\n", *validateConfig)
+		return
+	}
 
 	// Handle help and version flags
 	if *showVersion {
@@ -102,17 +130,42 @@ func main() {
 		return
 	}
 
-	// Validate execution mode
-	mode, err := validateExecutionMode(*localMode, *remoteMode)
-	if err != nil {
-		errorHandler.HandleConfigError(err)
-		os.Exit(1)
+	if *helpConfig {
+		ui.ShowHelp("config", version)
+		return
 	}
-	cfg.Mode = mode
 
-	// Set parsed values
-	cfg.ContainerImages = []string(containerImages)
-	cfg.CacheLabels = map[string]string(cacheLabels)
+	// Load configuration from YAML file first (if specified)
+	if *configFile != "" {
+		if err := cfg.LoadFromYAML(*configFile); err != nil {
+			errorHandler.HandleConfigError(err)
+			os.Exit(1)
+		}
+	}
+
+	// Validate execution mode (command line takes precedence)
+	if *localMode || *remoteMode {
+		mode, err := validateExecutionMode(*localMode, *remoteMode)
+		if err != nil {
+			errorHandler.HandleConfigError(err)
+			os.Exit(1)
+		}
+		cfg.Mode = mode
+	}
+
+	// Set parsed values (command line takes precedence over config file)
+	if len(containerImages) > 0 {
+		cfg.ContainerImages = []string(containerImages)
+	}
+	if len(cacheLabels) > 0 {
+		if cfg.CacheLabels == nil {
+			cfg.CacheLabels = make(map[string]string)
+		}
+		for k, v := range cacheLabels {
+			cfg.CacheLabels[k] = v // Command line labels override config file labels
+		}
+	}
+
 	cfg.Verbose = *verbose
 	cfg.Quiet = *quiet
 	cfg.MachineType = *machineType
@@ -142,7 +195,22 @@ func main() {
 
 	toolInfo := ui.GetToolInfo()
 	fmt.Printf("✅ %s completed successfully!\n", toolInfo.ShortDesc)
-	fmt.Printf("Disk image '%s' is ready for use with GKE nodes.\n", cfg.DiskImageName) // 修改字段名
+	fmt.Printf("Disk image '%s' is ready for use with GKE nodes.\n", cfg.DiskImageName)
+}
+
+// handleGenerateConfig handles configuration template generation
+func handleGenerateConfig(templateType, outputPath string) error {
+	if outputPath == "" {
+		outputPath = fmt.Sprintf("gke-cache-%s.yaml", templateType)
+	}
+
+	if err := config.GenerateYAMLTemplate(outputPath, templateType); err != nil {
+		return err
+	}
+
+	fmt.Printf("✅ Generated %s configuration template: %s\n", templateType, outputPath)
+	fmt.Printf("📝 Edit the template and use it with: --config=%s\n", outputPath)
+	return nil
 }
 
 // validateExecutionMode ensures exactly one execution mode is specified

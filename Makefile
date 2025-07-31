@@ -12,7 +12,7 @@ BUILD_FLAGS = -a -installsuffix cgo
 BIN_DIR = bin
 DIST_DIR = dist
 
-.PHONY: build build-static build-all clean install test test-binary lint help
+.PHONY: build build-static build-all clean install test test-binary lint help test-config test-all
 
 # Default target - build static binary
 all: build-static
@@ -94,6 +94,8 @@ help:
 	@echo "  lint         - Run linter"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  help         - Show this help"
+	@echo "  test-config  - Test configuration file functionality"
+	@echo "  test-all     - Run all tests including config tests"
 	@echo ""
 	@echo "Variables:"
 	@echo "  TOOL_NAME  - Tool name (default: $(TOOL_NAME))"
@@ -104,3 +106,28 @@ help:
 	@echo "  ✅ Embedded setup scripts"
 	@echo "  ✅ Portable across systems"
 	@echo "  ✅ Optimized size"
+
+# Test configuration file functionality
+test-config: build-static
+	@echo "Testing configuration file functionality..."
+	@mkdir -p /tmp/gke-config-test
+	
+	# Test config generation
+	@$(BIN_DIR)/$(TOOL_NAME) --generate-config basic --output /tmp/gke-config-test/basic.yaml
+	@$(BIN_DIR)/$(TOOL_NAME) --generate-config advanced --output /tmp/gke-config-test/advanced.yaml
+	@$(BIN_DIR)/$(TOOL_NAME) --generate-config ci-cd --output /tmp/gke-config-test/ci-cd.yaml
+	@$(BIN_DIR)/$(TOOL_NAME) --generate-config ml --output /tmp/gke-config-test/ml.yaml
+	
+	# Test config validation
+	@$(BIN_DIR)/$(TOOL_NAME) --validate-config /tmp/gke-config-test/basic.yaml
+	@$(BIN_DIR)/$(TOOL_NAME) --validate-config /tmp/gke-config-test/advanced.yaml
+	
+	# Test help
+	@$(BIN_DIR)/$(TOOL_NAME) --help-config > /dev/null
+	
+	@rm -rf /tmp/gke-config-test
+	@echo "✅ Configuration file functionality tests passed!"
+
+# Complete test suite including config tests
+test-all: test test-binary test-config
+	@echo "✅ All tests passed!"
