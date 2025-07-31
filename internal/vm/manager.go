@@ -1,0 +1,68 @@
+package vm
+
+import (
+	"context"
+
+	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/gcp"
+	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
+)
+
+// Manager handles VM lifecycle operations
+type Manager struct {
+	gcpClient *gcp.Client
+	logger    *log.Logger
+}
+
+// NewManager creates a new VM manager
+func NewManager(gcpClient *gcp.Client, logger *log.Logger) *Manager {
+	return &Manager{
+		gcpClient: gcpClient,
+		logger:    logger,
+	}
+}
+
+// CreateVM creates a new VM instance
+func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, error) {
+	m.logger.Infof("Creating VM: %s", config.Name)
+
+	// Implementation would create actual GCP VM
+	instance := &Instance{
+		Name: config.Name,
+		Zone: config.Zone,
+	}
+
+	return instance, nil
+}
+
+// DeleteVM deletes a VM instance
+func (m *Manager) DeleteVM(ctx context.Context, name, zone string) error {
+	m.logger.Infof("Deleting VM: %s", name)
+
+	// Implementation would delete actual GCP VM
+	return nil
+}
+
+// ValidatePermissions validates GCP permissions
+func (m *Manager) ValidatePermissions(ctx context.Context, projectName, zone string) error {
+	m.logger.Debug("Validating GCP permissions...")
+
+	// Implementation would validate actual GCP permissions
+	return nil
+}
+
+// Config holds VM configuration
+type Config struct {
+	Name           string
+	Zone           string
+	MachineType    string
+	Network        string
+	Subnet         string
+	ServiceAccount string
+	Preemptible    bool
+}
+
+// Instance represents a VM instance
+type Instance struct {
+	Name string
+	Zone string
+}

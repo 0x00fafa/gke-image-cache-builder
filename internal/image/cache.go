@@ -1,0 +1,40 @@
+package image
+
+import (
+	"context"
+
+	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/disk"
+	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
+)
+
+// Cache handles container image caching operations
+type Cache struct {
+	logger *log.Logger
+}
+
+// NewCache creates a new image cache handler
+func NewCache(logger *log.Logger) *Cache {
+	return &Cache{
+		logger: logger,
+	}
+}
+
+// ValidateImageAccess validates access to a container image
+func (c *Cache) ValidateImageAccess(ctx context.Context, image string) error {
+	c.logger.Debugf("Validating access to image: %s", image)
+
+	// Implementation would validate actual image access
+	return nil
+}
+
+// PullAndCache pulls and caches a container image
+func (c *Cache) PullAndCache(ctx context.Context, image string, cacheDisk *disk.Disk) error {
+	c.logger.Infof("Pulling and caching image: %s", image)
+
+	// Implementation would:
+	// 1. Pull the container image
+	// 2. Cache it to the disk using containerd
+	// 3. Optimize for GKE compatibility
+
+	return nil
+}
