@@ -122,28 +122,28 @@ gke-image-cache-builder -R \
 ### Download Pre-built Binary
 ```bash
 # Linux AMD64
-curl -L https://github.com/your-org/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-linux-amd64 -o gke-image-cache-builder
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-linux-amd64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
 
 # macOS AMD64
-curl -L https://github.com/your-org/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-amd64 -o gke-image-cache-builder
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-amd64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
 
 # macOS ARM64 (Apple Silicon)
-curl -L https://github.com/your-org/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-arm64 -o gke-image-cache-builder
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-arm64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
 ```
 
 ### Build from Source
 ```bash
-git clone https://github.com/your-org/gke-image-cache-builder.git
+git clone https://github.com/0x00fafa/gke-image-cache-builder.git
 cd gke-image-cache-builder
 make build-static
 ```
 
 ### Using Go Install
 ```bash
-go install github.com/your-org/gke-image-cache-builder/cmd@latest
+go install github.com/0x00fafa/gke-image-cache-builder/cmd@latest
 ```
 
 ## 📖 Usage
@@ -305,7 +305,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Development Setup
 ```bash
-git clone https://github.com/your-org/gke-image-cache-builder.git
+git clone https://github.com/0x00fafa/gke-image-cache-builder.git
 cd gke-image-cache-builder
 go mod download
 make build
@@ -329,9 +329,9 @@ Apache 2.0 - see [LICENSE](LICENSE) file for details.
 
 ## 📞 Support
 
-- 📖 [Documentation](https://github.com/your-org/gke-image-cache-builder/wiki)
-- 🐛 [Issue Tracker](https://github.com/your-org/gke-image-cache-builder/issues)
-- 💬 [Discussions](https://github.com/your-org/gke-image-cache-builder/discussions)
+- 📖 [Documentation](https://github.com/0x00fafa/gke-image-cache-builder/wiki)
+- 🐛 [Issue Tracker](https://github.com/0x00fafa/gke-image-cache-builder/issues)
+- 💬 [Discussions](https://github.com/0x00fafa/gke-image-cache-builder/discussions)
 
 ---
 
