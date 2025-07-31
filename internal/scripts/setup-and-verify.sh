@@ -1,6 +1,6 @@
 #!/bin/bash
 # GKE Image Cache Builder - VM Setup and Verification Script
-# This script combines all VM setup, containerd installation, and verification logic
+# This script is embedded in the binary and executed at runtime
 
 set -e
 

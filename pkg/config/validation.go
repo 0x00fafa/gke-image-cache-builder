@@ -38,8 +38,8 @@ func (c *Config) validateRequiredFields() error {
 	if c.ProjectName == "" {
 		return fmt.Errorf("project-name is required")
 	}
-	if c.CacheName == "" {
-		return fmt.Errorf("cache-name is required")
+	if c.DiskImageName == "" { // 修改：从 CacheName 改为 DiskImageName
+		return fmt.Errorf("disk-image-name is required")
 	}
 	if len(c.ContainerImages) == 0 {
 		return fmt.Errorf("at least one container-image is required")

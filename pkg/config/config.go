@@ -20,7 +20,7 @@ type Config struct {
 
 	// Required fields
 	ProjectName     string
-	CacheName       string
+	DiskImageName   string // 修改：从 CacheName 改为 DiskImageName
 	Zone            string
 	ContainerImages []string
 

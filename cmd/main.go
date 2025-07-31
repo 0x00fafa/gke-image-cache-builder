@@ -37,7 +37,7 @@ func main() {
 
 	// Required parameters
 	flag.StringVar(&cfg.ProjectName, "project-name", "", "GCP project name")
-	flag.StringVar(&cfg.CacheName, "cache-name", "", "Name for the image cache disk")
+	flag.StringVar(&cfg.DiskImageName, "disk-image-name", "", "Name for the disk image") // 修改参数名
 
 	// Container images (repeatable)
 	var containerImages stringSlice
@@ -142,7 +142,7 @@ func main() {
 
 	toolInfo := ui.GetToolInfo()
 	fmt.Printf("✅ %s completed successfully!\n", toolInfo.ShortDesc)
-	fmt.Printf("Cache disk '%s' is ready for use with GKE nodes.\n", cfg.CacheName)
+	fmt.Printf("Disk image '%s' is ready for use with GKE nodes.\n", cfg.DiskImageName) // 修改字段名
 }
 
 // validateExecutionMode ensures exactly one execution mode is specified

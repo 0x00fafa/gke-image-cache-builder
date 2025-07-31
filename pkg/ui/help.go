@@ -96,7 +96,7 @@ PURPOSE:
     └────────────────────┘    └────────────────────┘    └────────────┘
 
 USAGE:
-    {{.ExecutableName}} {-L|-R} --project-name <PROJECT> --cache-name <NAME> [OPTIONS]
+    {{.ExecutableName}} {-L|-R} --project-name <PROJECT> --disk-image-name <NAME> [OPTIONS]
 
 EXECUTION MODE (Required):
     -L, --local-mode     Execute on current GCP VM (cost-effective)
@@ -104,7 +104,7 @@ EXECUTION MODE (Required):
 
 REQUIRED:
     --project-name <PROJECT>      GCP project name
-    --cache-name <NAME>           Name for the image cache disk
+    --disk-image-name <NAME>      Name for the disk image
     --container-image <IMAGE>     Container image to cache (repeatable)
 
 COMMON OPTIONS:
@@ -118,13 +118,13 @@ COMMON OPTIONS:
 QUICK START:
     # Cache web application images locally
     {{.ExecutableName}} -L --project-name=my-project \
-        --cache-name=web-app-cache \
+        --disk-image-name=web-app-cache \
         --container-image=nginx:1.21 \
         --container-image=redis:6.2-alpine
 
     # Cache ML model images remotely
     {{.ExecutableName}} -R --project-name=ml-platform --zone=us-west1-b \
-        --cache-name=ml-models-cache --cache-size=50 \
+        --disk-image-name=ml-models-cache --cache-size=50 \
         --container-image=tensorflow/tensorflow:2.8.0-gpu
 
 BENEFITS:
@@ -143,14 +143,14 @@ const examplesHelpTemplate = `{{.DisplayName}} - Usage Examples & Scenarios
 
 Basic web application cache:
     {{.ExecutableName}} -L --project-name=my-project \
-        --cache-name=web-stack-cache \
+        --disk-image-name=web-stack-cache \
         --container-image=nginx:1.21 \
         --container-image=redis:6.2-alpine \
         --container-image=postgres:13
 
 Microservices application cache:
     {{.ExecutableName}} -L --project-name=production \
-        --cache-name=microservices-cache \
+        --disk-image-name=microservices-cache \
         --cache-size=30 --timeout=45m \
         --cache-labels=env=production \
         --cache-labels=team=platform \
@@ -164,14 +164,14 @@ Microservices application cache:
 Basic usage from local development machine:
     {{.ExecutableName}} -R --project-name=my-project \
         --zone=us-west1-b \
-        --cache-name=dev-cache \
+        --disk-image-name=dev-cache \
         --container-image=nginx:latest \
         --container-image=node:16-alpine
 
 CI/CD pipeline integration:
     {{.ExecutableName}} -R --project-name=$GCP_PROJECT \
         --zone=us-central1-a \
-        --cache-name=ci-cache-$BUILD_ID \
+        --disk-image-name=ci-cache-$BUILD_ID \
         --timeout=30m --preemptible \
         --cache-labels=build-id=$BUILD_ID \
         --container-image=gcr.io/$GCP_PROJECT/app:$GIT_SHA
@@ -229,6 +229,6 @@ func ShowVersionInfo(version, buildTime, gitCommit string) {
 		fmt.Printf("Commit: %s\n", gitCommit)
 	}
 	fmt.Printf("\n%s\n", toolInfo.Purpose)
-	fmt.Printf("\nQuick start: %s {-L|-R} --project-name=<PROJECT> --cache-name=<NAME> --container-image=<IMAGE>\n", toolInfo.ExecutableName)
+	fmt.Printf("\nQuick start: %s {-L|-R} --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>\n", toolInfo.ExecutableName)
 	fmt.Printf("Help: %s --help | --help-examples\n", toolInfo.ExecutableName)
 }

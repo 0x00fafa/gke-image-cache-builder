@@ -34,6 +34,8 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 		e.showCacheNameError()
 	case strings.Contains(errorMsg, "container-image"):
 		e.showContainerImageError()
+	case strings.Contains(errorMsg, "disk-image-name"): // 修改错误匹配
+		e.showDiskImageNameError() // 修改函数名
 	default:
 		e.showGenericError(err)
 	}
@@ -57,10 +59,10 @@ SOLUTION:
 
 EXAMPLES:
     # Local mode (on GCP VM)
-    %s -L --project-name=my-project --cache-name=web-cache --container-image=nginx:latest
+    %s -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
     
     # Remote mode (from anywhere)
-    %s -R --zone=us-west1-b --project-name=my-project --cache-name=web-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
 
 Run '%s --help' for more information.
 `, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
@@ -75,7 +77,7 @@ SOLUTION:
     Available zones: us-west1-b, us-central1-a, europe-west1-b, asia-east1-a
     
 EXAMPLE:
-    %s -R --zone=us-west1-b --project-name=my-project --cache-name=my-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=my-cache --container-image=nginx:latest
 
 TIP: Use 'gcloud compute zones list' to see all available zones
 `, e.toolInfo.ExecutableName)
@@ -88,7 +90,7 @@ CURRENT ENVIRONMENT: Not a GCP VM
 
 SOLUTIONS:
     1. Use remote mode instead:
-       %s -R --zone=us-west1-b --project-name=<PROJECT> --cache-name=<NAME> --container-image=<IMAGE>
+       %s -R --zone=us-west1-b --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>
        
     2. Run this command on a GCP VM instance
     
@@ -106,8 +108,8 @@ SOLUTION:
     Specify your GCP project with --project-name parameter
     
 EXAMPLES:
-    %s -L --project-name=my-gcp-project --cache-name=web-cache --container-image=nginx:latest
-    %s -R --zone=us-west1-b --project-name=production-project --cache-name=app-cache --container-image=node:16
+    %s -L --project-name=my-gcp-project --disk-image-name=web-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=production-project --disk-image-name=app-cache --container-image=node:16
 
 TIP: Use 'gcloud config get-value project' to see your current project
 `, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
@@ -130,7 +132,10 @@ EXAMPLES:
     --cache-name=microservices-cache    # For microservices stack
 
 FULL EXAMPLE:
-    %s -L --project-name=my-project --cache-name=web-app-cache --container-image=nginx:latest
+    %s -L --project-name=my-project --cache-name=web-stack \
+        --container-image=nginx:1.21 \
+        --container-image=redis:6.2-alpine \
+        --container-image=postgres:13
 `, e.toolInfo.ExecutableName)
 }
 
@@ -154,10 +159,29 @@ EXAMPLES:
     --container-image=nginx:latest --container-image=redis:alpine --container-image=postgres:13
     
 FULL EXAMPLE:
-    %s -L --project-name=my-project --cache-name=web-stack \
-        --container-image=nginx:1.21 \
-        --container-image=redis:6.2-alpine \
-        --container-image=postgres:13
+    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
+`, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showDiskImageNameError() { // 修改函数名
+	fmt.Printf(`Error: Disk image name required
+
+SOLUTION:
+    Specify a name for your disk image with --disk-image-name parameter
+    
+    Disk image name should be:
+    • Descriptive of the cached images
+    • Unique within your project
+    • Follow GCP naming conventions (lowercase, hyphens)
+    
+EXAMPLES:
+    --disk-image-name=web-app-cache          # For web application images
+    --disk-image-name=ml-models-cache        # For ML model images  
+    --disk-image-name=microservices-cache    # For microservices stack
+    --disk-image-name=team-a-cache-v1.2.0    # With version/team info
+
+FULL EXAMPLE:
+    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
 `, e.toolInfo.ExecutableName)
 }
 
@@ -165,12 +189,13 @@ func (e *ErrorHandler) showGenericError(err error) {
 	fmt.Printf(`Error: %v
 
 QUICK HELP:
-    %s {-L|-R} --project-name=<PROJECT> --cache-name=<NAME> --container-image=<IMAGE>
+    %s {-L|-R} --project-name=<PROJECT> --disk-image-name=<NAME> \
+        --container-image=<IMAGE>
     
     Required parameters:
     • Execution mode: -L (local) or -R (remote)  
     • --project-name: Your GCP project
-    • --cache-name: Name for the cache disk
+    • --disk-image-name: Name for the disk image
     • --container-image: Images to cache (repeatable)
     
     Additional for remote mode:
@@ -191,16 +216,16 @@ func ShowNoArgsHelp() {
 Missing required arguments. Quick start:
 
 LOCAL MODE (on GCP VM):
-    %s -L --project-name=<PROJECT> --cache-name=<NAME> \
+    %s -L --project-name=<PROJECT> --disk-image-name=<NAME> \
         --container-image=<IMAGE>
 
 REMOTE MODE (from anywhere):
     %s -R --zone=<ZONE> --project-name=<PROJECT> \
-        --cache-name=<NAME> --container-image=<IMAGE>
+        --disk-image-name=<NAME> --container-image=<IMAGE>
 
 EXAMPLES:
-    %s -L --project-name=my-project --cache-name=web-cache --container-image=nginx:latest
-    %s -R --zone=us-west1-b --project-name=my-project --cache-name=app-cache --container-image=node:16
+    %s -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=app-cache --container-image=node:16
 
 For detailed help: %s --help
 For examples: %s --help-examples

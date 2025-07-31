@@ -46,17 +46,24 @@ func (w *Workflow) Execute(ctx context.Context) error {
 	}
 	defer w.cleanupResources(ctx, resources)
 
-	// Step 3: Process container images
+	// Step 3: Setup VM if in remote mode
+	if w.config.IsRemoteMode() && resources.VMInstance != nil {
+		if err := w.vmManager.SetupVM(ctx, resources.VMInstance); err != nil {
+			return fmt.Errorf("VM setup failed: %w", err)
+		}
+	}
+
+	// Step 4: Process container images
 	if err := w.processContainerImages(ctx, resources); err != nil {
 		return fmt.Errorf("image processing failed: %w", err)
 	}
 
-	// Step 4: Create cache disk image
+	// Step 5: Create cache disk image
 	if err := w.createCacheImage(ctx, resources); err != nil {
 		return fmt.Errorf("cache image creation failed: %w", err)
 	}
 
-	// Step 5: Verify cache image
+	// Step 6: Verify cache image
 	if err := w.verifyCacheImage(ctx); err != nil {
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
@@ -110,7 +117,7 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 
 	// Create cache disk
 	diskConfig := &disk.Config{
-		Name:   fmt.Sprintf("%s-disk", w.config.CacheName),
+		Name:   fmt.Sprintf("%s-disk", w.config.DiskImageName),
 		Zone:   w.config.Zone,
 		SizeGB: w.config.CacheSizeGB,
 		Type:   w.config.DiskType,
@@ -164,7 +171,7 @@ func (w *Workflow) createCacheImage(ctx context.Context, resources *WorkflowReso
 	w.logger.Info("Creating cache disk image...")
 
 	imageConfig := &disk.ImageConfig{
-		Name:        w.config.CacheName,
+		Name:        w.config.DiskImageName,
 		SourceDisk:  resources.CacheDisk.Name,
 		Zone:        w.config.Zone,
 		Family:      w.config.CacheFamilyName,
@@ -176,14 +183,14 @@ func (w *Workflow) createCacheImage(ctx context.Context, resources *WorkflowReso
 		return fmt.Errorf("failed to create cache image: %w", err)
 	}
 
-	w.logger.Infof("Cache image '%s' created successfully", w.config.CacheName)
+	w.logger.Infof("Cache image '%s' created successfully", w.config.DiskImageName)
 	return nil
 }
 
 func (w *Workflow) verifyCacheImage(ctx context.Context) error {
 	w.logger.Info("Verifying cache image...")
 
-	if err := w.diskManager.VerifyImage(ctx, w.config.CacheName); err != nil {
+	if err := w.diskManager.VerifyImage(ctx, w.config.DiskImageName); err != nil {
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
 

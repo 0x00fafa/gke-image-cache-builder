@@ -2,7 +2,9 @@ package vm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ai-on-gke/tools/gke-image-cache-builder/internal/scripts"
 	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/gcp"
 	"github.com/ai-on-gke/tools/gke-image-cache-builder/pkg/log"
 )
@@ -39,6 +41,19 @@ func (m *Manager) DeleteVM(ctx context.Context, name, zone string) error {
 	m.logger.Infof("Deleting VM: %s", name)
 
 	// Implementation would delete actual GCP VM
+	return nil
+}
+
+// SetupVM executes the embedded setup script on the VM
+func (m *Manager) SetupVM(ctx context.Context, instance *Instance) error {
+	m.logger.Infof("Setting up VM: %s", instance.Name)
+
+	// Execute the embedded setup script
+	if err := scripts.ExecuteSetupScript(); err != nil {
+		return fmt.Errorf("failed to setup VM: %w", err)
+	}
+
+	m.logger.Infof("VM setup completed: %s", instance.Name)
 	return nil
 }
 

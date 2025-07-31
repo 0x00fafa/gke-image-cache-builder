@@ -55,7 +55,7 @@ func NewBuilder(cfg *config.Config) (*Builder, error) {
 // BuildImageCache orchestrates the entire image cache creation process
 func (b *Builder) BuildImageCache(ctx context.Context) error {
 	b.logger.Info("Starting image cache build process")
-	b.logger.Infof("Cache name: %s", b.config.CacheName)
+	b.logger.Infof("Disk image name: %s", b.config.DiskImageName) // 修改字段名
 	b.logger.Infof("Container images: %v", b.config.ContainerImages)
 
 	workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache)

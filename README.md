@@ -11,7 +11,7 @@ Accelerate pod startup by pre-caching container images at the disk level, elimin
 ### Local Mode (on GCP VM)
 \`\`\`bash
 gke-image-cache-builder -L --project-name=my-project \
-    --cache-name=web-cache \
+    --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
 \`\`\`
@@ -20,7 +20,7 @@ gke-image-cache-builder -L --project-name=my-project \
 \`\`\`bash
 gke-image-cache-builder -R --zone=us-west1-b \
     --project-name=my-project \
-    --cache-name=web-cache \
+    --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
 \`\`\`
@@ -48,7 +48,7 @@ make build
 ## Usage
 
 \`\`\`
-gke-image-cache-builder {-L|-R} --project-name <PROJECT> --cache-name <NAME> [OPTIONS]
+gke-image-cache-builder {-L|-R} --project-name <PROJECT> --disk-image-name <NAME> [OPTIONS]
 
 EXECUTION MODE (Required):
   -L, --local-mode     Execute on current GCP VM (cost-effective)
@@ -56,7 +56,7 @@ EXECUTION MODE (Required):
 
 REQUIRED:
   --project-name <PROJECT>      GCP project name
-  --cache-name <NAME>           Name for the image cache disk
+  --disk-image-name <NAME>      Name for the disk image
   --container-image <IMAGE>     Container image to cache (repeatable)
 
 COMMON OPTIONS:
