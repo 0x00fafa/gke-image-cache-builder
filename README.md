@@ -10,13 +10,13 @@ This project is **inspired by and builds upon** the original [gke-disk-image-bui
 
 Accelerate pod startup by pre-caching container images at the disk level, eliminating image pull latency for GKE workloads. This approach can reduce pod startup time from minutes to seconds for large container images.
 
-\`\`\`
+```
 ┌─ Container Images ─┐    ┌─ Image Cache Disk ─┐    ┌─ GKE Node ─┐
 │ nginx:latest       │ ──▶│ Pre-cached Images  │ ──▶│ Instant    │
 │ redis:alpine       │    │ (containerd ready) │    │ Pod Start  │
 │ postgres:13        │    │                    │    │            │
 └────────────────────┘    └────────────────────┘    └────────────┘
-\`\`\`
+```
 
 ## 📊 Comparison with Original Project
 
@@ -97,17 +97,17 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 - For local mode: Must run on a GCP VM instance
 
 ### Local Mode (Cost-Effective)
-\`\`\`bash
+```bash
 # Execute on current GCP VM
 gke-image-cache-builder -L \
     --project-name=my-project \
     --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
-\`\`\`
+```
 
 ### Remote Mode (Universal)
-\`\`\`bash
+```bash
 # Execute from anywhere (creates temporary VM)
 gke-image-cache-builder -R \
     --zone=us-west1-b \
@@ -115,12 +115,12 @@ gke-image-cache-builder -R \
     --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
-\`\`\`
+```
 
 ## 📦 Installation
 
 ### Download Pre-built Binary
-\`\`\`bash
+```bash
 # Linux AMD64
 curl -L https://github.com/your-org/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-linux-amd64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
@@ -132,26 +132,26 @@ chmod +x gke-image-cache-builder
 # macOS ARM64 (Apple Silicon)
 curl -L https://github.com/your-org/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-arm64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
-\`\`\`
+```
 
 ### Build from Source
-\`\`\`bash
+```bash
 git clone https://github.com/your-org/gke-image-cache-builder.git
 cd gke-image-cache-builder
 make build-static
-\`\`\`
+```
 
 ### Using Go Install
-\`\`\`bash
+```bash
 go install github.com/your-org/gke-image-cache-builder/cmd@latest
-\`\`\`
+```
 
 ## 📖 Usage
 
 ### Basic Syntax
-\`\`\`
+```
 gke-image-cache-builder {-L|-R} --project-name <PROJECT> --disk-image-name <NAME> [OPTIONS]
-\`\`\`
+```
 
 ### Required Parameters
 | Parameter | Description | Example |
@@ -172,7 +172,7 @@ gke-image-cache-builder {-L|-R} --project-name <PROJECT> --disk-image-name <NAME
 ### Advanced Examples
 
 #### Microservices Stack
-\`\`\`bash
+```bash
 gke-image-cache-builder -L \
     --project-name=production \
     --disk-image-name=microservices-cache \
@@ -183,10 +183,10 @@ gke-image-cache-builder -L \
     --container-image=gcr.io/my-project/api-gateway:v2.1.0 \
     --container-image=gcr.io/my-project/user-service:v1.8.3 \
     --container-image=gcr.io/my-project/order-service:v1.5.2
-\`\`\`
+```
 
 #### CI/CD Integration
-\`\`\`bash
+```bash
 gke-image-cache-builder -R \
     --project-name=$GCP_PROJECT \
     --zone=us-central1-a \
@@ -196,10 +196,10 @@ gke-image-cache-builder -R \
     --cache-labels=build-id=$BUILD_ID \
     --cache-labels=branch=$GIT_BRANCH \
     --container-image=gcr.io/$GCP_PROJECT/app:$GIT_SHA
-\`\`\`
+```
 
 #### ML/AI Workloads
-\`\`\`bash
+```bash
 gke-image-cache-builder -R \
     --project-name=ml-platform \
     --zone=us-west1-b \
@@ -211,7 +211,7 @@ gke-image-cache-builder -R \
     --container-image=tensorflow/tensorflow:2.8.0-gpu \
     --container-image=pytorch/pytorch:1.11.0-cuda11.3-cudnn8-runtime \
     --container-image=gcr.io/ml-platform/custom-model:v3.2.0
-\`\`\`
+```
 
 ## 💡 Benefits
 
@@ -226,7 +226,7 @@ gke-image-cache-builder -R \
 ## 🔧 Advanced Configuration
 
 ### Authentication Options
-\`\`\`bash
+```bash
 # Service account file
 --gcp-oauth=/path/to/service-account.json
 
@@ -235,10 +235,10 @@ gke-image-cache-builder -R \
 
 # Image pull authentication
 --image-pull-auth=ServiceAccountToken
-\`\`\`
+```
 
 ### Network Configuration
-\`\`\`bash
+```bash
 # Custom VPC and subnet
 --network=my-vpc --subnet=my-subnet
 
@@ -247,21 +247,21 @@ gke-image-cache-builder -R \
 
 # Use preemptible instances (cost savings)
 --preemptible
-\`\`\`
+```
 
 ### Disk Configuration
-\`\`\`bash
+```bash
 # Disk type selection
 --disk-type=pd-ssd  # or pd-standard, pd-balanced
 
 # Image family and labels
 --cache-family=my-cache-family
 --cache-labels=env=prod --cache-labels=team=platform
-\`\`\`
+```
 
 ## 🆘 Help System
 
-\`\`\`bash
+```bash
 # Basic help
 gke-image-cache-builder --help
 
@@ -273,49 +273,49 @@ gke-image-cache-builder --help-examples
 
 # Version information
 gke-image-cache-builder --version
-\`\`\`
+```
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 **Local mode fails with "Not a GCP VM"**
-\`\`\`bash
+```bash
 # Solution: Use remote mode or run on a GCP VM
 gke-image-cache-builder -R --zone=us-west1-b ...
-\`\`\`
+```
 
 **Permission denied errors**
-\`\`\`bash
+```bash
 # Ensure proper IAM roles:
 # - Compute Instance Admin (v1)
 # - Compute Image User
 # - Service Account User
-\`\`\`
+```
 
 **Large images timeout**
-\`\`\`bash
+```bash
 # Increase timeout for large images
 --timeout=60m
-\`\`\`
+```
 
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
-\`\`\`bash
+```bash
 git clone https://github.com/your-org/gke-image-cache-builder.git
 cd gke-image-cache-builder
 go mod download
 make build
-\`\`\`
+```
 
 ### Running Tests
-\`\`\`bash
+```bash
 make test
 make test-binary
-\`\`\`
+```
 
 ## 📄 License
 
