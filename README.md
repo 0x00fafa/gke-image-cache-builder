@@ -53,6 +53,12 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 - **Local Mode (-L)**: Execute on current GCP VM (cost-effective)
 - **Remote Mode (-R)**: Create temporary GCP VM (works anywhere)
 
+### 📁 **YAML Configuration File Support**
+- Generate configuration templates for different use cases
+- Mix configuration files with command-line overrides
+- Environment-specific configurations (dev, staging, production)
+- Built-in validation and help system
+
 ### 🛠️ **Enhanced Configuration**
 - Comprehensive parameter validation
 - Flexible timeout settings
@@ -62,7 +68,7 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 ### 📚 **Rich Help System**
 - Context-aware error messages with solutions
 - Comprehensive examples and scenarios
-- Multiple help levels (basic, full, examples)
+- Multiple help levels (basic, full, examples, config)
 
 ### 🔐 **Advanced Authentication**
 - Multiple registry authentication methods
@@ -87,7 +93,132 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 | **Cloud Build Integration** | Added complexity and costs | Direct VM execution |
 | **GCS Logging** | Over-engineering for most use cases | Console logging with optional verbosity |
 | **Complex Shell Scripts** | Hard to maintain and debug | Clean Go implementation |
-| **YAML Configuration Files** | Added unnecessary complexity | Command-line parameters |
+
+## 📁 Configuration File Support
+
+### Why Use Configuration Files?
+
+Configuration files provide several advantages over command-line only approaches:
+
+- **Simplified Commands**: Complex builds become simple `--config my-app.yaml`
+- **Reusability**: Share configurations across teams and environments
+- **Version Control**: Track configuration changes alongside code
+- **Environment Management**: Separate configs for dev, staging, production
+- **Documentation**: YAML comments explain configuration choices
+
+### Configuration Priority
+
+Parameters are applied in this order (highest to lowest priority):
+1. **Command line parameters** (highest priority)
+2. **Environment variables**
+3. **Configuration file values**
+4. **Default values** (lowest priority)
+
+### Quick Configuration Start
+
+```bash
+# Generate a configuration template
+gke-image-cache-builder --generate-config basic --output web-app.yaml
+
+# Edit the generated file, then use it
+gke-image-cache-builder --config web-app.yaml
+
+# Mix configuration file with command line overrides
+gke-image-cache-builder --config base.yaml --project-name=override-project
+```
+
+### Available Templates
+
+| Template | Description | Use Case |
+|----------|-------------|----------|
+| `basic` | Minimal configuration | Simple applications, getting started |
+| `advanced` | All available options | Production deployments, complex setups |
+| `ci-cd` | CI/CD optimized | Automated pipelines, cost optimization |
+| `ml` | ML/AI workloads | Large models, GPU workloads, long timeouts |
+
+### Configuration File Examples
+
+#### Basic Configuration
+```yaml
+# web-app.yaml
+execution:
+  mode: local
+  
+project:
+  name: my-project
+
+cache:
+  name: web-app-cache
+  size_gb: 20
+  labels:
+    env: production
+    team: platform
+
+images:
+  - nginx:1.21
+  - redis:6.2-alpine
+  - postgres:13
+```
+
+#### Advanced Production Configuration
+```yaml
+# production.yaml
+execution:
+  mode: remote
+  zone: us-west1-b
+
+project:
+  name: production-project
+
+cache:
+  name: microservices-cache
+  size_gb: 50
+  family: production-cache
+  disk_type: pd-ssd
+  labels:
+    env: production
+    version: v2.1.0
+    cost-center: engineering
+
+images:
+  - gcr.io/my-project/api-gateway:v2.1.0
+  - gcr.io/my-project/user-service:v1.8.3
+  - gcr.io/my-project/order-service:v1.5.2
+  - nginx:1.21
+  - redis:6.2-alpine
+
+network:
+  network: production-vpc
+  subnet: production-subnet
+
+advanced:
+  timeout: 45m
+  machine_type: e2-standard-4
+  preemptible: true
+
+auth:
+  service_account: cache-builder@production.iam.gserviceaccount.com
+  image_pull_auth: ServiceAccountToken
+
+logging:
+  verbose: true
+```
+
+### Configuration Management Commands
+
+```bash
+# Generate configuration templates
+gke-image-cache-builder --generate-config basic --output basic.yaml
+gke-image-cache-builder --generate-config advanced --output advanced.yaml
+gke-image-cache-builder --generate-config ci-cd --output ci-cd.yaml
+gke-image-cache-builder --generate-config ml --output ml.yaml
+
+# Validate configuration files
+gke-image-cache-builder --validate-config my-config.yaml
+
+# Get configuration help
+gke-image-cache-builder --help-config
+```
 
 ## 🚀 Quick Start
 
@@ -96,25 +227,42 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 - Appropriate IAM permissions
 - For local mode: Must run on a GCP VM instance
 
-### Local Mode (Cost-Effective)
+### Method 1: Configuration File (Recommended)
 ```bash
-# Execute on current GCP VM
+# Generate a configuration template
+gke-image-cache-builder --generate-config basic --output web-app.yaml
+
+# Edit the configuration file
+# vim web-app.yaml
+
+# Build using configuration
+gke-image-cache-builder --config web-app.yaml
+```
+
+### Method 2: Command Line (Traditional)
+```bash
+# Local Mode (Cost-Effective)
 gke-image-cache-builder -L \
     --project-name=my-project \
     --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
-```
 
-### Remote Mode (Universal)
-```bash
-# Execute from anywhere (creates temporary VM)
+# Remote Mode (Universal)
 gke-image-cache-builder -R \
     --zone=us-west1-b \
     --project-name=my-project \
     --disk-image-name=web-cache \
     --container-image=nginx:latest \
     --container-image=redis:alpine
+```
+
+### Method 3: Hybrid Approach
+```bash
+# Use config file but override specific parameters
+gke-image-cache-builder --config production.yaml \
+    --project-name=staging-project \
+    --disk-image-name=staging-cache
 ```
 
 ## 📦 Installation
@@ -150,67 +298,84 @@ go install github.com/0x00fafa/gke-image-cache-builder/cmd@latest
 
 ### Basic Syntax
 ```
+# Command line approach
 gke-image-cache-builder {-L|-R} --project-name <PROJECT> --disk-image-name <NAME> [OPTIONS]
+
+# Configuration file approach  
+gke-image-cache-builder --config <CONFIG_FILE> [OPTIONS]
+
+# Hybrid approach (config + CLI overrides)
+gke-image-cache-builder --config <CONFIG_FILE> [CLI_OVERRIDES]
 ```
 
-### Required Parameters
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `-L` or `-R` | Execution mode (Local/Remote) | `-L` |
-| `--project-name` | GCP project name | `--project-name=my-project` |
-| `--disk-image-name` | Name for the disk image | `--disk-image-name=web-cache` |
-| `--container-image` | Container images to cache (repeatable) | `--container-image=nginx:latest` |
-
-### Common Options
-| Parameter | Description | Default | Example |
-|-----------|-------------|---------|---------|
-| `--zone` | GCP zone (required for -R mode) | Auto-detect (local) | `--zone=us-west1-b` |
-| `--cache-size` | Cache disk size in GB | 10 | `--cache-size=50` |
-| `--timeout` | Build timeout | 20m | `--timeout=45m` |
-| `--verbose` | Enable verbose logging | false | `--verbose` |
+### Configuration File Parameters
+| Section | Parameter | Description | Example |
+|---------|-----------|-------------|---------|
+| `execution` | `mode` | Execution mode | `local` or `remote` |
+| `execution` | `zone` | GCP zone | `us-west1-b` |
+| `project` | `name` | GCP project name | `my-project` |
+| `cache` | `name` | Disk image name | `web-app-cache` |
+| `cache` | `size_gb` | Disk size in GB | `20` |
+| `cache` | `family` | Image family | `web-cache` |
+| `cache` | `disk_type` | Disk type | `pd-ssd` |
+| `cache` | `labels` | Key-value labels | `env: production` |
+| `images` | - | Container images list | `- nginx:latest` |
+| `network` | `network` | VPC network | `my-vpc` |
+| `network` | `subnet` | Subnet | `my-subnet` |
+| `advanced` | `timeout` | Build timeout | `45m` |
+| `advanced` | `machine_type` | VM machine type | `e2-standard-4` |
+| `advanced` | `preemptible` | Use preemptible VM | `true` |
+| `auth` | `service_account` | Service account email | `sa@project.iam.gserviceaccount.com` |
+| `auth` | `image_pull_auth` | Image pull auth | `ServiceAccountToken` |
+| `logging` | `verbose` | Verbose logging | `true` |
+| `logging` | `quiet` | Quiet mode | `false` |
 
 ### Advanced Examples
 
-#### Microservices Stack
+#### Multi-Environment Setup
 ```bash
-gke-image-cache-builder -L \
-    --project-name=production \
-    --disk-image-name=microservices-cache \
-    --cache-size=30 \
-    --timeout=45m \
-    --cache-labels=env=production \
-    --cache-labels=team=platform \
-    --container-image=gcr.io/my-project/api-gateway:v2.1.0 \
-    --container-image=gcr.io/my-project/user-service:v1.8.3 \
-    --container-image=gcr.io/my-project/order-service:v1.5.2
+# Development
+gke-image-cache-builder --config configs/dev.yaml
+
+# Staging  
+gke-image-cache-builder --config configs/staging.yaml
+
+# Production
+gke-image-cache-builder --config configs/production.yaml
 ```
 
-#### CI/CD Integration
+#### CI/CD Integration with Configuration
 ```bash
-gke-image-cache-builder -R \
-    --project-name=$GCP_PROJECT \
-    --zone=us-central1-a \
-    --disk-image-name=ci-cache-$BUILD_ID \
-    --timeout=30m \
-    --preemptible \
-    --cache-labels=build-id=$BUILD_ID \
-    --cache-labels=branch=$GIT_BRANCH \
-    --container-image=gcr.io/$GCP_PROJECT/app:$GIT_SHA
+# Generate CI/CD optimized config
+gke-image-cache-builder --generate-config ci-cd --output .github/gke-cache.yaml
+
+# Use in GitHub Actions
+gke-image-cache-builder --config .github/gke-cache.yaml \
+    --disk-image-name=ci-cache-${{ github.run_id }} \
+    --cache-labels=build-id=${{ github.run_id }} \
+    --cache-labels=branch=${{ github.ref_name }}
 ```
 
-#### ML/AI Workloads
+#### Configuration with Environment Variables
+```yaml
+# config.yaml with environment variable placeholders
+project:
+  name: ${GCP_PROJECT}
+  
+cache:
+  name: ${CACHE_NAME:-default-cache}
+  labels:
+    build-id: ${BUILD_ID}
+    branch: ${GIT_BRANCH}
+```
+
+#### ML/AI Workload Configuration
 ```bash
-gke-image-cache-builder -R \
-    --project-name=ml-platform \
-    --zone=us-west1-b \
-    --disk-image-name=ml-models-cache \
-    --cache-size=200 \
-    --timeout=2h \
-    --machine-type=e2-standard-8 \
-    --disk-type=pd-ssd \
-    --container-image=tensorflow/tensorflow:2.8.0-gpu \
-    --container-image=pytorch/pytorch:1.11.0-cuda11.3-cudnn8-runtime \
-    --container-image=gcr.io/ml-platform/custom-model:v3.2.0
+# Generate ML-optimized configuration
+gke-image-cache-builder --generate-config ml --output ml-config.yaml
+
+# Use for ML workloads
+gke-image-cache-builder --config ml-config.yaml
 ```
 
 ## 💡 Benefits
@@ -260,7 +425,6 @@ gke-image-cache-builder -R \
 ```
 
 ## 🆘 Help System
-
 ```bash
 # Basic help
 gke-image-cache-builder --help
