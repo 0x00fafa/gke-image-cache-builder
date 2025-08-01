@@ -5,44 +5,78 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"strings"
 )
 
 //go:embed setup-and-verify.sh
 var setupScript string
 
-// ExecuteSetupScript writes the embedded script to a temporary file and executes it
-func ExecuteSetupScript() error {
-	// Create temporary file
-	tmpDir := os.TempDir()
-	scriptPath := filepath.Join(tmpDir, "gke-setup-and-verify.sh")
+// GetSetupScript returns the embedded setup script
+func GetSetupScript() string {
+	return setupScript
+}
 
-	// Write embedded script to temporary file
-	if err := os.WriteFile(scriptPath, []byte(setupScript), 0755); err != nil {
-		return fmt.Errorf("failed to write setup script: %w", err)
+// ExecuteSetupScript executes the setup script locally (for local mode)
+func ExecuteSetupScript() error {
+	// Create a temporary script file
+	tmpFile, err := os.CreateTemp("", "gke-setup-*.sh")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary script file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write the script content to the temporary file
+	if _, err := tmpFile.WriteString(setupScript); err != nil {
+		return fmt.Errorf("failed to write script content: %w", err)
 	}
 
-	// Ensure cleanup
-	defer os.Remove(scriptPath)
+	// Make the script executable
+	if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
+		return fmt.Errorf("failed to make script executable: %w", err)
+	}
 
-	// Execute the script
-	cmd := exec.Command("/bin/bash", scriptPath)
+	// Close the file before executing
+	tmpFile.Close()
+
+	// Execute the script with bash
+	cmd := exec.Command("bash", tmpFile.Name())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("setup script execution failed: %w", err)
+		return fmt.Errorf("script execution failed: %w", err)
 	}
 
 	return nil
 }
 
-// GetSetupScript returns the embedded setup script content
-func GetSetupScript() string {
-	return setupScript
+// ValidateScriptContent validates that the embedded script contains required components
+func ValidateScriptContent() error {
+	requiredComponents := []string{
+		"install_containerd",
+		"configure_containerd",
+		"verify_installation",
+		"setup_cache_environment",
+	}
+
+	for _, component := range requiredComponents {
+		if !strings.Contains(setupScript, component) {
+			return fmt.Errorf("script missing required component: %s", component)
+		}
+	}
+
+	return nil
 }
 
-// WriteSetupScriptToFile writes the embedded script to a specified file path
-func WriteSetupScriptToFile(filePath string) error {
-	return os.WriteFile(filePath, []byte(setupScript), 0755)
+// GetScriptInfo returns information about the embedded script
+func GetScriptInfo() map[string]interface{} {
+	lines := strings.Split(setupScript, "\n")
+	return map[string]interface{}{
+		"total_lines":    len(lines),
+		"size_bytes":     len(setupScript),
+		"has_shebang":    strings.HasPrefix(setupScript, "#!/bin/bash"),
+		"contains_setup": strings.Contains(setupScript, "main()"),
+	}
 }

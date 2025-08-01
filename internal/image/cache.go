@@ -2,6 +2,7 @@ package image
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
@@ -21,7 +22,7 @@ func NewCache(logger *log.Logger) *Cache {
 
 // ValidateImageAccess validates access to a container image
 func (c *Cache) ValidateImageAccess(ctx context.Context, image string) error {
-	c.logger.Debugf("Validating access to image: %s", image)
+	c.logger.Info(fmt.Sprintf("Validating access to image: %s", image))
 
 	// Implementation would validate actual image access
 	return nil
@@ -29,7 +30,7 @@ func (c *Cache) ValidateImageAccess(ctx context.Context, image string) error {
 
 // PullAndCache pulls and caches a container image
 func (c *Cache) PullAndCache(ctx context.Context, image string, cacheDisk *disk.Disk) error {
-	c.logger.Infof("Pulling and caching image: %s", image)
+	c.logger.Info(fmt.Sprintf("Pulling and caching image: %s", image))
 
 	// Implementation would:
 	// 1. Pull the container image

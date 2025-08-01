@@ -28,15 +28,6 @@ func main() {
 	cfg := config.NewConfig()
 	errorHandler := ui.NewErrorHandler()
 
-	// Configuration file support
-	configFile := flag.String("config", "", "Path to YAML configuration file")
-	flag.StringVar(configFile, "c", "", "Path to YAML configuration file (short form)")
-
-	// Config generation and validation
-	generateConfig := flag.String("generate-config", "", "Generate configuration template (basic|advanced|ci-cd|ml)")
-	generateOutput := flag.String("output", "", "Output path for generated config (default: stdout)")
-	validateConfig := flag.String("validate-config", "", "Validate YAML configuration file")
-
 	// Define execution mode flags (mutually exclusive)
 	localMode := flag.Bool("L", false, "Execute on current GCP VM (local mode)")
 	flag.BoolVar(localMode, "local-mode", false, "Execute on current GCP VM (local mode)")
@@ -45,83 +36,41 @@ func main() {
 	flag.BoolVar(remoteMode, "remote-mode", false, "Create temporary GCP VM for execution (remote mode)")
 
 	// Required parameters
-	flag.StringVar(&cfg.ProjectName, "project-name", "", "GCP project name")
-	flag.StringVar(&cfg.DiskImageName, "disk-image-name", "", "Name for the disk image")
+	flag.StringVar(&cfg.ProjectName, "project-name", "", "Name of a GCP project where the script will be run")
+	flag.StringVar(&cfg.ImageName, "image-name", "", "Name of the image that will be generated")
+	flag.StringVar(&cfg.Zone, "zone", "", "Zone where the resources will be used")
+	flag.StringVar(&cfg.GCSPath, "gcs-path", "", "GCS path prefix to dump the logs")
 
 	// Container images (repeatable)
 	var containerImages stringSlice
-	flag.Var(&containerImages, "container-image", "Container image to cache (repeatable)")
+	flag.Var(&containerImages, "container-image", "Container image to include (can be specified multiple times)")
 
-	// Zone and location
-	flag.StringVar(&cfg.Zone, "z", "", "GCP zone (required for -R mode)")
-	flag.StringVar(&cfg.Zone, "zone", "", "GCP zone (required for -R mode)")
-	flag.StringVar(&cfg.Network, "n", cfg.Network, "VPC network for build VM (remote mode only)")
-	flag.StringVar(&cfg.Network, "network", cfg.Network, "VPC network for build VM (remote mode only)")
-	flag.StringVar(&cfg.Subnet, "u", cfg.Subnet, "Subnet for build VM (remote mode only)")
-	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet for build VM (remote mode only)")
-
-	// Cache configuration
-	flag.IntVar(&cfg.DiskSizeGB, "s", cfg.DiskSizeGB, "Disk size in GB")         // 改为 DiskSizeGB
-	flag.IntVar(&cfg.DiskSizeGB, "disk-size", cfg.DiskSizeGB, "Disk size in GB") // 改为 DiskSizeGB
-	flag.DurationVar(&cfg.Timeout, "t", cfg.Timeout, "Build timeout")
-	flag.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Build timeout")
-
-	// Image management
-	flag.StringVar(&cfg.DiskFamilyName, "disk-family", cfg.DiskFamilyName, "Image family name") // 改为 DiskFamilyName
-	var diskLabels stringMap                                                                    // 改为 diskLabels
-	flag.Var(&diskLabels, "disk-labels", "Disk labels (key=value, repeatable)")                 // 改为 disk-labels
-
-	// Authentication
+	// Optional parameters
+	flag.StringVar(&cfg.ImageFamilyName, "image-family-name", cfg.ImageFamilyName, "Name of the image family")
+	flag.StringVar(&cfg.JobName, "job-name", cfg.JobName, "Name of the workflow")
 	flag.StringVar(&cfg.GCPOAuth, "gcp-oauth", "", "Path to GCP service account credential file")
+	flag.IntVar(&cfg.DiskSizeGB, "disk-size-gb", cfg.DiskSizeGB, "Size of disk in GB")
+	flag.StringVar(&cfg.ImagePullAuth, "image-pull-auth", cfg.ImagePullAuth, "Auth mechanism for pulling images")
+	flag.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Timeout for each step")
+	flag.StringVar(&cfg.Network, "network", cfg.Network, "VPC network")
+	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet")
 	flag.StringVar(&cfg.ServiceAccount, "service-account", cfg.ServiceAccount, "Service account email")
-	flag.StringVar(&cfg.ImagePullAuth, "image-pull-auth", cfg.ImagePullAuth, "Image pull authentication")
 
-	// Logging (console only, no GCS)
-	verbose := flag.Bool("v", false, "Enable verbose logging")
-	flag.BoolVar(verbose, "verbose", false, "Enable verbose logging")
-	quiet := flag.Bool("q", false, "Suppress non-error output")
-	flag.BoolVar(quiet, "quiet", false, "Suppress non-error output")
-
-	// Advanced options
-	flag.StringVar(&cfg.JobName, "job-name", cfg.JobName, "Build job name")
-	machineType := flag.String("machine-type", "e2-standard-2", "VM machine type for -R mode")
-	preemptible := flag.Bool("preemptible", false, "Use preemptible VM for -R mode")
-	diskType := flag.String("disk-type", "pd-standard", "Cache disk type")
+	// Custom flag for multiple labels
+	var imageLabels stringMap
+	flag.Var(&imageLabels, "image-labels", "Image labels in key=value format (can be specified multiple times)")
 
 	// Help options
-	helpFull := flag.Bool("help-full", false, "Show complete help")
 	helpExamples := flag.Bool("help-examples", false, "Show usage examples")
-	helpConfig := flag.Bool("help-config", false, "Show configuration file help")
+	helpFull := flag.Bool("help-full", false, "Show complete help with all options")
 	showVersion := flag.Bool("version", false, "Show version information")
+	envInfo := flag.Bool("env-info", false, "Show environment information")
 
 	flag.Parse()
 
-	// Handle special commands first
-	if *generateConfig != "" {
-		if err := handleGenerateConfig(*generateConfig, *generateOutput); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to generate config: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	if *validateConfig != "" {
-		if err := config.ValidateYAMLFile(*validateConfig); err != nil {
-			fmt.Fprintf(os.Stderr, "Configuration validation failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("✅ Configuration file '%s' is valid\n", *validateConfig)
-		return
-	}
-
-	// Handle help and version flags
+	// Handle special flags
 	if *showVersion {
 		ui.ShowVersionInfo(version, buildTime, gitCommit)
-		return
-	}
-
-	if *helpFull {
-		ui.ShowHelp("full", version)
 		return
 	}
 
@@ -130,47 +79,32 @@ func main() {
 		return
 	}
 
-	if *helpConfig {
-		ui.ShowHelp("config", version)
+	if *helpFull {
+		ui.ShowHelp("full", version)
 		return
 	}
 
-	// Load configuration from YAML file first (if specified)
-	if *configFile != "" {
-		if err := cfg.LoadFromYAML(*configFile); err != nil {
-			errorHandler.HandleConfigError(err)
-			os.Exit(1)
-		}
-	}
-
-	// Validate execution mode (command line takes precedence)
-	if *localMode || *remoteMode {
-		mode, err := validateExecutionMode(*localMode, *remoteMode)
+	if *envInfo {
+		envInfo, err := config.ValidateEnvironment(config.ModeUnspecified)
 		if err != nil {
-			errorHandler.HandleConfigError(err)
+			fmt.Fprintf(os.Stderr, "Failed to detect environment: %v\n", err)
 			os.Exit(1)
 		}
-		cfg.Mode = mode
+		ui.ShowEnvironmentInfo(envInfo)
+		return
 	}
 
-	// Set parsed values (command line takes precedence over config file)
-	if len(containerImages) > 0 {
-		cfg.ContainerImages = []string(containerImages)
+	// Validate execution mode
+	mode, err := validateExecutionMode(*localMode, *remoteMode)
+	if err != nil {
+		errorHandler.HandleConfigError(err)
+		os.Exit(1)
 	}
-	if len(diskLabels) > 0 { // 改为 diskLabels
-		if cfg.DiskLabels == nil { // 改为 DiskLabels
-			cfg.DiskLabels = make(map[string]string) // 改为 DiskLabels
-		}
-		for k, v := range diskLabels { // 改为 diskLabels
-			cfg.DiskLabels[k] = v // Command line labels override config file labels  // 改为 DiskLabels
-		}
-	}
+	cfg.Mode = mode
 
-	cfg.Verbose = *verbose
-	cfg.Quiet = *quiet
-	cfg.MachineType = *machineType
-	cfg.Preemptible = *preemptible
-	cfg.DiskType = *diskType
+	// Set parsed values
+	cfg.ContainerImages = []string(containerImages)
+	cfg.ImageLabels = map[string]string(imageLabels)
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
@@ -188,29 +122,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	if err := builder.BuildImageCache(ctx); err != nil {
+	if err := builder.BuildDiskImage(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Build failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	toolInfo := ui.GetToolInfo()
-	fmt.Printf("✅ %s completed successfully!\n", toolInfo.ShortDesc)
-	fmt.Printf("Disk image '%s' is ready for use with GKE nodes.\n", cfg.DiskImageName)
-}
-
-// handleGenerateConfig handles configuration template generation
-func handleGenerateConfig(templateType, outputPath string) error {
-	if outputPath == "" {
-		outputPath = fmt.Sprintf("gke-cache-%s.yaml", templateType)
-	}
-
-	if err := config.GenerateYAMLTemplate(outputPath, templateType); err != nil {
-		return err
-	}
-
-	fmt.Printf("✅ Generated %s configuration template: %s\n", templateType, outputPath)
-	fmt.Printf("📝 Edit the template and use it with: --config=%s\n", outputPath)
-	return nil
+	fmt.Println("Disk image build completed successfully!")
 }
 
 // validateExecutionMode ensures exactly one execution mode is specified

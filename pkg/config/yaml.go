@@ -14,7 +14,7 @@ import (
 type YAMLConfig struct {
 	Execution ExecutionConfig `yaml:"execution"`
 	Project   ProjectConfig   `yaml:"project"`
-	Disk      DiskConfig      `yaml:"disk"` // 改为 Disk
+	Image     ImageConfig     `yaml:"image"`
 	Images    []string        `yaml:"images"`
 	Network   NetworkConfig   `yaml:"network,omitempty"`
 	Advanced  AdvancedConfig  `yaml:"advanced,omitempty"`
@@ -31,12 +31,11 @@ type ProjectConfig struct {
 	Name string `yaml:"name"`
 }
 
-type DiskConfig struct { // 改为 DiskConfig
-	Name     string            `yaml:"name"`
-	SizeGB   int               `yaml:"size_gb,omitempty"`
-	Family   string            `yaml:"family,omitempty"`
-	Labels   map[string]string `yaml:"labels,omitempty"`
-	DiskType string            `yaml:"disk_type,omitempty"`
+type ImageConfig struct {
+	Name   string            `yaml:"name"`
+	SizeGB int               `yaml:"size_gb,omitempty"`
+	Family string            `yaml:"family,omitempty"`
+	Labels map[string]string `yaml:"labels,omitempty"`
 }
 
 type NetworkConfig struct {
@@ -118,31 +117,27 @@ func (c *Config) applyYAMLConfig(yamlConfig *YAMLConfig, filePath string) error 
 		c.ProjectName = yamlConfig.Project.Name
 	}
 
-	// Disk configuration (原来的 Cache configuration)
-	if c.DiskImageName == "" && yamlConfig.Disk.Name != "" {
-		c.DiskImageName = yamlConfig.Disk.Name
+	// Image configuration
+	if c.ImageName == "" && yamlConfig.Image.Name != "" {
+		c.ImageName = yamlConfig.Image.Name
 	}
 
-	if c.DiskSizeGB == 10 && yamlConfig.Disk.SizeGB > 0 { // 10 is default
-		c.DiskSizeGB = yamlConfig.Disk.SizeGB
+	if c.DiskSizeGB == 20 && yamlConfig.Image.SizeGB > 0 { // 20 is default
+		c.DiskSizeGB = yamlConfig.Image.SizeGB
 	}
 
-	if c.DiskFamilyName == "gke-image-cache" && yamlConfig.Disk.Family != "" { // default value
-		c.DiskFamilyName = yamlConfig.Disk.Family
-	}
-
-	if c.DiskType == "pd-standard" && yamlConfig.Disk.DiskType != "" { // default value
-		c.DiskType = yamlConfig.Disk.DiskType
+	if c.ImageFamilyName == "gke-disk-image" && yamlConfig.Image.Family != "" { // default value
+		c.ImageFamilyName = yamlConfig.Image.Family
 	}
 
 	// Labels (merge with existing)
-	if len(yamlConfig.Disk.Labels) > 0 {
-		if c.DiskLabels == nil {
-			c.DiskLabels = make(map[string]string)
+	if len(yamlConfig.Image.Labels) > 0 {
+		if c.ImageLabels == nil {
+			c.ImageLabels = make(map[string]string)
 		}
-		for k, v := range yamlConfig.Disk.Labels {
-			if _, exists := c.DiskLabels[k]; !exists { // Don't override CLI labels
-				c.DiskLabels[k] = v
+		for k, v := range yamlConfig.Image.Labels {
+			if _, exists := c.ImageLabels[k]; !exists { // Don't override CLI labels
+				c.ImageLabels[k] = v
 			}
 		}
 	}
@@ -170,16 +165,8 @@ func (c *Config) applyYAMLConfig(yamlConfig *YAMLConfig, filePath string) error 
 		c.Timeout = timeout
 	}
 
-	if c.JobName == "image-cache-build" && yamlConfig.Advanced.JobName != "" { // default value
+	if c.JobName == "disk-image-build" && yamlConfig.Advanced.JobName != "" { // default value
 		c.JobName = yamlConfig.Advanced.JobName
-	}
-
-	if c.MachineType == "e2-standard-2" && yamlConfig.Advanced.MachineType != "" { // default value
-		c.MachineType = yamlConfig.Advanced.MachineType
-	}
-
-	if !c.Preemptible && yamlConfig.Advanced.Preemptible { // default is false
-		c.Preemptible = yamlConfig.Advanced.Preemptible
 	}
 
 	// Authentication
@@ -193,15 +180,6 @@ func (c *Config) applyYAMLConfig(yamlConfig *YAMLConfig, filePath string) error 
 
 	if c.ImagePullAuth == "None" && yamlConfig.Auth.ImagePullAuth != "" { // default value
 		c.ImagePullAuth = yamlConfig.Auth.ImagePullAuth
-	}
-
-	// Logging
-	if !c.Verbose && yamlConfig.Logging.Verbose { // default is false
-		c.Verbose = yamlConfig.Logging.Verbose
-	}
-
-	if !c.Quiet && yamlConfig.Logging.Quiet { // default is false
-		c.Quiet = yamlConfig.Logging.Quiet
 	}
 
 	return nil
@@ -264,10 +242,10 @@ execution:
 project:
   name: my-project  # Replace with your GCP project name
 
-disk:
+image:
   name: web-app-cache  # Name for the disk image
-  size_gb: 10  # Disk size in GB
-  family: gke-image-cache  # Image family name
+  size_gb: 20  # Disk size in GB
+  family: gke-disk-image  # Image family name
   labels:
     env: development
     team: platform
@@ -279,8 +257,6 @@ images:
   - postgres:13
 
 # Optional network configuration for build VM (remote mode only)
-# These settings only affect the temporary VM used for building,
-# NOT the final disk image
 # network:
 #   network: default
 #   subnet: default
@@ -288,20 +264,13 @@ images:
 # Optional advanced settings
 # advanced:
 #   timeout: 20m
-#   job_name: image-cache-build
-#   machine_type: e2-standard-2
-#   preemptible: false
+#   job_name: disk-image-build
 
 # Optional authentication
 # auth:
 #   gcp_oauth: /path/to/service-account.json
 #   service_account: default
 #   image_pull_auth: None
-
-# Optional logging
-# logging:
-#   verbose: false
-#   quiet: false
 `
 
 const advancedYAMLTemplate = `# GKE Image Cache Builder - Advanced Configuration Template
@@ -314,11 +283,10 @@ execution:
 project:
   name: production-project  # GCP project name
 
-disk:
+image:
   name: microservices-cache  # Disk image name
   size_gb: 50  # Disk size in GB
   family: production-cache  # Image family name
-  disk_type: pd-ssd  # Options: pd-standard, pd-ssd, pd-balanced
   labels:
     env: production
     team: platform
@@ -336,8 +304,6 @@ images:
   - postgres:13
 
 # Network configuration for build VM (remote mode only)
-# IMPORTANT: These settings only affect the temporary VM used for building.
-# They do NOT affect the final disk image or how it will be used.
 network:
   network: production-vpc      # VPC network for build VM
   subnet: production-subnet    # Subnet for build VM
@@ -346,19 +312,12 @@ network:
 advanced:
   timeout: 45m  # Build timeout
   job_name: production-cache-build
-  machine_type: e2-standard-4  # VM machine type for remote builds
-  preemptible: true  # Use preemptible instances for cost savings
 
 # Authentication configuration
 auth:
   gcp_oauth: /path/to/service-account.json
   service_account: cache-builder@production-project.iam.gserviceaccount.com
   image_pull_auth: ServiceAccountToken
-
-# Logging configuration
-logging:
-  verbose: true  # Enable verbose logging
-  quiet: false   # Suppress non-error output
 `
 
 const cicdYAMLTemplate = `# GKE Image Cache Builder - CI/CD Configuration Template
@@ -371,11 +330,10 @@ execution:
 project:
   name: ${GCP_PROJECT}  # Use environment variable
 
-disk:
+image:
   name: ci-cache-${BUILD_ID}  # Dynamic naming with build ID
   size_gb: 30
   family: ci-cache
-  disk_type: pd-standard  # Cost-effective for CI/CD
   labels:
     env: ci
     build-id: ${BUILD_ID}
@@ -393,7 +351,6 @@ images:
   - redis:6.2-alpine
 
 # Network configuration for CI/CD build VM
-# These settings only affect the temporary build VM, not the final disk image
 network:
   network: default
   subnet: default
@@ -402,18 +359,11 @@ network:
 advanced:
   timeout: 30m  # Reasonable timeout for CI/CD
   job_name: ci-build-${BUILD_NUMBER}
-  machine_type: e2-standard-2
-  preemptible: true  # Cost optimization
 
 # Authentication (use service account in CI/CD)
 auth:
   service_account: ci-cache-builder@${GCP_PROJECT}.iam.gserviceaccount.com
   image_pull_auth: ServiceAccountToken
-
-# Logging for CI/CD
-logging:
-  verbose: false  # Keep logs concise in CI/CD
-  quiet: false
 `
 
 const mlYAMLTemplate = `# GKE Image Cache Builder - ML/AI Configuration Template
@@ -426,11 +376,10 @@ execution:
 project:
   name: ml-platform-project
 
-disk:
+image:
   name: ml-models-cache
   size_gb: 200  # Large size for ML models and datasets
   family: ml-cache
-  disk_type: pd-ssd  # Fast I/O for large models
   labels:
     env: production
     workload: ml
@@ -458,8 +407,6 @@ images:
   - gcr.io/ml-platform-project/model-server:v2.1.0
 
 # Network configuration for ML build VM
-# These settings only affect the temporary build VM, not the final disk image
-# Use appropriate network for accessing ML model registries and datasets
 network:
   network: ml-vpc
   subnet: ml-subnet
@@ -468,16 +415,9 @@ network:
 advanced:
   timeout: 2h  # Long timeout for large ML images
   job_name: ml-cache-build
-  machine_type: e2-standard-8  # High-performance machine for ML workloads
-  preemptible: false  # Reliability over cost for production ML
 
 # Authentication
 auth:
   service_account: ml-cache-builder@ml-platform-project.iam.gserviceaccount.com
   image_pull_auth: ServiceAccountToken
-
-# Logging
-logging:
-  verbose: true  # Detailed logging for ML builds
-  quiet: false
 `

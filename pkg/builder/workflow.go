@@ -100,11 +100,11 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 		vmConfig := &vm.Config{
 			Name:           fmt.Sprintf("cache-builder-%s", w.config.JobName),
 			Zone:           w.config.Zone,
-			MachineType:    w.config.MachineType,
+			MachineType:    "e2-standard-2", // Default machine type
 			Network:        w.config.Network,
 			Subnet:         w.config.Subnet,
 			ServiceAccount: w.config.ServiceAccount,
-			Preemptible:    w.config.Preemptible,
+			Preemptible:    false, // Default to non-preemptible
 		}
 
 		vmInstance, err := w.vmManager.CreateVM(ctx, vmConfig)
@@ -116,19 +116,12 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 	}
 
 	// Create cache disk
-	diskConfig := &disk.Config{
-		Name:   fmt.Sprintf("%s-disk", w.config.DiskImageName),
-		Zone:   w.config.Zone,
-		SizeGB: w.config.DiskSizeGB,
-		Type:   w.config.DiskType,
-	}
-
-	cacheDisk, err := w.diskManager.CreateDisk(ctx, diskConfig)
+	diskName, err := w.diskManager.CreateAndAttach(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cache disk: %w", err)
 	}
-	resources.CacheDisk = cacheDisk
-	w.logger.Infof("Created cache disk: %s", cacheDisk.Name)
+	resources.CacheDiskName = diskName
+	w.logger.Infof("Created cache disk: %s", diskName)
 
 	w.logger.Info("Environment setup completed")
 	return resources, nil
@@ -147,7 +140,8 @@ func (w *Workflow) processContainerImages(ctx context.Context, resources *Workfl
 			defer wg.Done()
 			w.logger.Progressf(index+1, len(w.config.ContainerImages), "Processing %s", image)
 
-			if err := w.imageCache.PullAndCache(ctx, image, resources.CacheDisk); err != nil {
+			cacheDisk := &disk.Disk{Name: resources.CacheDiskName}
+			if err := w.imageCache.PullAndCache(ctx, image, cacheDisk); err != nil {
 				errChan <- fmt.Errorf("failed to process image %s: %w", image, err)
 			}
 		}(i, img)
@@ -170,27 +164,18 @@ func (w *Workflow) processContainerImages(ctx context.Context, resources *Workfl
 func (w *Workflow) createCacheImage(ctx context.Context, resources *WorkflowResources) error {
 	w.logger.Info("Creating cache disk image...")
 
-	imageConfig := &disk.ImageConfig{
-		Name:        w.config.DiskImageName,
-		SourceDisk:  resources.CacheDisk.Name,
-		Zone:        w.config.Zone,
-		Family:      w.config.DiskFamilyName,
-		Labels:      w.config.DiskLabels,
-		Description: fmt.Sprintf("Image cache containing %d container images", len(w.config.ContainerImages)),
-	}
-
-	if err := w.diskManager.CreateImage(ctx, imageConfig); err != nil {
+	if err := w.diskManager.CreateImage(ctx, resources.CacheDiskName); err != nil {
 		return fmt.Errorf("failed to create cache image: %w", err)
 	}
 
-	w.logger.Infof("Cache image '%s' created successfully", w.config.DiskImageName)
+	w.logger.Infof("Cache image '%s' created successfully", w.config.ImageName)
 	return nil
 }
 
 func (w *Workflow) verifyCacheImage(ctx context.Context) error {
 	w.logger.Info("Verifying cache image...")
 
-	if err := w.diskManager.VerifyImage(ctx, w.config.DiskImageName); err != nil {
+	if err := w.diskManager.VerifyImage(ctx, w.config.ImageName); err != nil {
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
 
@@ -209,11 +194,11 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 		}
 	}
 
-	if resources.CacheDisk != nil {
-		if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
-			w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
+	if resources.CacheDiskName != "" {
+		if err := w.diskManager.Cleanup(ctx, resources.CacheDiskName); err != nil {
+			w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDiskName, err)
 		} else {
-			w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
+			w.logger.Infof("Cleaned up disk: %s", resources.CacheDiskName)
 		}
 	}
 
@@ -222,6 +207,6 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 
 // WorkflowResources holds references to temporary resources
 type WorkflowResources struct {
-	VMInstance *vm.Instance
-	CacheDisk  *disk.Disk
+	VMInstance    *vm.Instance
+	CacheDiskName string
 }

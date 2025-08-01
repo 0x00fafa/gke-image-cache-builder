@@ -3,6 +3,8 @@ package ui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
 )
 
 // ErrorHandler provides context-aware error messages and solutions
@@ -22,12 +24,6 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 	errorMsg := err.Error()
 
 	switch {
-	case strings.Contains(errorMsg, "configuration file not found"):
-		e.showConfigFileNotFoundError(err)
-	case strings.Contains(errorMsg, "failed to parse YAML"):
-		e.showYAMLParseError(err)
-	case strings.Contains(errorMsg, "configuration validation failed"):
-		e.showConfigValidationError(err)
 	case strings.Contains(errorMsg, "execution mode"):
 		e.showExecutionModeError()
 	case strings.Contains(errorMsg, "zone") && strings.Contains(errorMsg, "required"):
@@ -36,95 +32,15 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 		e.showLocalModeEnvironmentError()
 	case strings.Contains(errorMsg, "project-name"):
 		e.showProjectNameError()
-	case strings.Contains(errorMsg, "disk-image-name"):
-		e.showDiskImageNameError()
+	case strings.Contains(errorMsg, "image-name"):
+		e.showImageNameError()
 	case strings.Contains(errorMsg, "container-image"):
 		e.showContainerImageError()
-	case strings.Contains(errorMsg, "invalid machine type"):
-		e.showMachineTypeError(err)
-	case strings.Contains(errorMsg, "invalid disk type"):
-		e.showDiskTypeError(err)
+	case strings.Contains(errorMsg, "gcs-path"):
+		e.showGCSPathError()
 	default:
 		e.showGenericError(err)
 	}
-}
-
-func (e *ErrorHandler) showConfigFileNotFoundError(err error) {
-	fmt.Printf(`Error: Configuration file not found
-
-%v
-
-SOLUTIONS:
-    1. Check the file path and ensure the file exists
-    2. Generate a configuration template:
-       %s --generate-config basic --output my-config.yaml
-    3. Use command line parameters instead:
-       %s -L --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>
-
-EXAMPLES:
-    # Generate and use a basic template
-    %s --generate-config basic --output web-app.yaml
-    %s --config web-app.yaml
-
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
-		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showYAMLParseError(err error) {
-	fmt.Printf(`Error: YAML configuration file parsing failed
-
-%v
-
-SOLUTIONS:
-    1. Check YAML syntax (indentation, colons, quotes)
-    2. Validate the configuration file:
-       %s --validate-config <CONFIG_FILE>
-    3. Generate a new template:
-       %s --generate-config basic --output new-config.yaml
-
-COMMON YAML ISSUES:
-    • Incorrect indentation (use spaces, not tabs)
-    • Missing colons after keys
-    • Unquoted special characters
-    • Inconsistent list formatting
-
-EXAMPLE VALID YAML:
-    execution:
-      mode: local
-    project:
-      name: my-project
-    images:
-      - nginx:latest
-      - redis:alpine
-
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showConfigValidationError(err error) {
-	fmt.Printf(`Error: Configuration validation failed
-
-%v
-
-SOLUTIONS:
-    1. Check required fields in your configuration file
-    2. Validate configuration syntax:
-       %s --validate-config <CONFIG_FILE>
-    3. Review configuration examples:
-       %s --help-config
-    4. Generate a working template:
-       %s --generate-config basic
-
-REQUIRED CONFIGURATION:
-    execution.mode: local or remote
-    project.name: your-gcp-project
-    cache.name: your-cache-name
-    images: [list of container images]
-
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
-		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showExecutionModeError() {
@@ -145,10 +61,10 @@ SOLUTION:
 
 EXAMPLES:
     # Local mode (on GCP VM)
-    %s -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
+    %s -L --project-name=my-project --image-name=web-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
     
     # Remote mode (from anywhere)
-    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --image-name=web-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
 
 Run '%s --help' for more information.
 `, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
@@ -163,7 +79,7 @@ SOLUTION:
     Available zones: us-west1-b, us-central1-a, europe-west1-b, asia-east1-a
     
 EXAMPLE:
-    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=my-cache --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --image-name=my-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
 
 TIP: Use 'gcloud compute zones list' to see all available zones
 `, e.toolInfo.ExecutableName)
@@ -176,15 +92,18 @@ CURRENT ENVIRONMENT: Not a GCP VM
 
 SOLUTIONS:
     1. Use remote mode instead:
-       %s -R --zone=us-west1-b --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>
+       %s -R --zone=us-west1-b --project-name=<PROJECT> --image-name=<NAME> --gcs-path=<GCS_PATH> --container-image=<IMAGE>
        
     2. Run this command on a GCP VM instance
     
     3. Use Google Cloud Shell:
        https://shell.cloud.google.com
+       
+    4. SSH to a GCP VM and run there:
+       gcloud compute ssh my-vm --command="%s -L ..."
 
 DETECTION: This tool detected it's not running on a GCP VM instance.
-`, e.toolInfo.ExecutableName)
+`, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showProjectNameError() {
@@ -194,34 +113,32 @@ SOLUTION:
     Specify your GCP project with --project-name parameter
     
 EXAMPLES:
-    %s -L --project-name=my-gcp-project --disk-image-name=web-cache --container-image=nginx:latest
-    %s -R --zone=us-west1-b --project-name=production-project --disk-image-name=app-cache --container-image=node:16
+    %s -L --project-name=my-gcp-project --image-name=web-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=production-project --image-name=app-cache --gcs-path=gs://bucket/logs --container-image=node:16
 
 TIP: Use 'gcloud config get-value project' to see your current project
 `, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
-func (e *ErrorHandler) showCacheNameError() {
-	fmt.Printf(`Error: Cache name required
+func (e *ErrorHandler) showImageNameError() {
+	fmt.Printf(`Error: Image name required
 
 SOLUTION:
-    Specify a name for your image cache disk with --cache-name parameter
+    Specify a name for your disk image with --image-name parameter
     
-    Cache name should be:
+    Image name should be:
     • Descriptive of the cached images
     • Unique within your project
     • Follow GCP naming conventions (lowercase, hyphens)
     
 EXAMPLES:
-    --cache-name=web-app-cache          # For web application images
-    --cache-name=ml-models-cache        # For ML model images  
-    --cache-name=microservices-cache    # For microservices stack
+    --image-name=web-app-cache          # For web application images
+    --image-name=ml-models-cache        # For ML model images  
+    --image-name=microservices-cache    # For microservices stack
+    --image-name=team-a-cache-v1.2.0    # With version/team info
 
 FULL EXAMPLE:
-    %s -L --project-name=my-project --cache-name=web-stack \
-        --container-image=nginx:1.21 \
-        --container-image=redis:6.2-alpine \
-        --container-image=postgres:13
+    %s -L --project-name=my-project --image-name=web-app-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
 `, e.toolInfo.ExecutableName)
 }
 
@@ -236,6 +153,7 @@ SUPPORTED REGISTRIES:
     • Docker Hub: nginx:latest, node:16-alpine
     • Google Container Registry: gcr.io/my-project/app:v1.0
     • Artifact Registry: us-docker.pkg.dev/my-project/repo/app:latest
+    • Private registries: registry.company.com/app:latest
     
 EXAMPLES:
     # Single image
@@ -245,95 +163,47 @@ EXAMPLES:
     --container-image=nginx:latest --container-image=redis:alpine --container-image=postgres:13
     
 FULL EXAMPLE:
-    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
+    %s -L --project-name=my-project --image-name=web-stack --gcs-path=gs://bucket/logs \
+        --container-image=nginx:1.21 \
+        --container-image=redis:6.2-alpine \
+        --container-image=postgres:13
 `, e.toolInfo.ExecutableName)
 }
 
-func (e *ErrorHandler) showDiskImageNameError() {
-	fmt.Printf(`Error: Disk image name required
+func (e *ErrorHandler) showGCSPathError() {
+	fmt.Printf(`Error: GCS path required
 
 SOLUTION:
-    Specify a name for your disk image with --disk-image-name parameter
+    Specify a GCS path for build logs with --gcs-path parameter
     
-    Disk image name should be:
-    • Descriptive of the cached images
-    • Unique within your project
-    • Follow GCP naming conventions (lowercase, hyphens)
+    GCS path should be:
+    • A valid GCS bucket path
+    • Accessible by your GCP credentials
+    • Include gs:// prefix
     
 EXAMPLES:
-    --disk-image-name=web-app-cache          # For web application images
-    --disk-image-name=ml-models-cache        # For ML model images  
-    --disk-image-name=microservices-cache    # For microservices stack
-    --disk-image-name=team-a-cache-v1.2.0    # With version/team info
+    --gcs-path=gs://my-bucket/logs          # Basic path
+    --gcs-path=gs://my-bucket/builds/logs   # With subdirectory
+    --gcs-path=gs://company-logs/gke-cache  # Organized path
 
 FULL EXAMPLE:
-    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
+    %s -L --project-name=my-project --image-name=web-cache --gcs-path=gs://my-bucket/logs --container-image=nginx:latest
+
+TIP: Create bucket with: gsutil mb gs://my-bucket
 `, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showMachineTypeError(err error) {
-	fmt.Printf(`Error: Invalid machine type
-
-%v
-
-SOLUTIONS:
-    Use a supported machine type in your configuration or command line:
-    
-    SUPPORTED MACHINE TYPES:
-    • e2-standard-2, e2-standard-4, e2-standard-8, e2-standard-16
-    • e2-highmem-2, e2-highmem-4, e2-highmem-8, e2-highmem-16  
-    • e2-highcpu-2, e2-highcpu-4, e2-highcpu-8, e2-highcpu-16
-    • n1-standard-1, n1-standard-2, n1-standard-4, n1-standard-8
-    • n2-standard-2, n2-standard-4, n2-standard-8, n2-standard-16
-
-EXAMPLES:
-    # Command line
-    --machine-type=e2-standard-4
-    
-    # Configuration file
-    advanced:
-      machine_type: e2-standard-4
-
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showDiskTypeError(err error) {
-	fmt.Printf(`Error: Invalid disk type
-
-%v
-
-SOLUTIONS:
-    Use a supported disk type in your configuration or command line:
-    
-    SUPPORTED DISK TYPES:
-    • pd-standard  (Standard persistent disk - cost-effective)
-    • pd-ssd       (SSD persistent disk - high performance)
-    • pd-balanced  (Balanced persistent disk - good performance/cost ratio)
-
-EXAMPLES:
-    # Command line
-    --disk-type=pd-ssd
-    
-    # Configuration file
-    cache:
-      disk_type: pd-ssd
-
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showGenericError(err error) {
 	fmt.Printf(`Error: %v
 
 QUICK HELP:
-    %s {-L|-R} --project-name=<PROJECT> --disk-image-name=<NAME> \
-        --container-image=<IMAGE>
+    %s {-L|-R} --project-name=<PROJECT> --image-name=<NAME> --gcs-path=<GCS_PATH> --container-image=<IMAGE>
     
     Required parameters:
     • Execution mode: -L (local) or -R (remote)  
     • --project-name: Your GCP project
-    • --disk-image-name: Name for the disk image
+    • --image-name: Name for the disk image
+    • --gcs-path: GCS path for logs
     • --container-image: Images to cache (repeatable)
     
     Additional for remote mode:
@@ -354,21 +224,46 @@ func ShowNoArgsHelp() {
 Missing required arguments. Quick start:
 
 LOCAL MODE (on GCP VM):
-    %s -L --project-name=<PROJECT> --disk-image-name=<NAME> \
+    %s -L --project-name=<PROJECT> --image-name=<NAME> --gcs-path=<GCS_PATH> \
         --container-image=<IMAGE>
 
 REMOTE MODE (from anywhere):
     %s -R --zone=<ZONE> --project-name=<PROJECT> \
-        --disk-image-name=<NAME> --container-image=<IMAGE>
+        --image-name=<NAME> --gcs-path=<GCS_PATH> --container-image=<IMAGE>
 
 EXAMPLES:
-    %s -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
-    %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=app-cache --container-image=node:16
+    %s -L --project-name=my-project --image-name=web-cache --gcs-path=gs://bucket/logs --container-image=nginx:latest
+    %s -R --zone=us-west1-b --project-name=my-project --image-name=app-cache --gcs-path=gs://bucket/logs --container-image=node:16
 
 For detailed help: %s --help
 For examples: %s --help-examples
+For all options: %s --help-full
 `, toolInfo.DisplayName, toolInfo.Purpose,
 		toolInfo.ExecutableName, toolInfo.ExecutableName,
 		toolInfo.ExecutableName, toolInfo.ExecutableName,
-		toolInfo.ExecutableName, toolInfo.ExecutableName)
+		toolInfo.ExecutableName, toolInfo.ExecutableName, toolInfo.ExecutableName)
+}
+
+// ShowEnvironmentInfo displays current environment information
+func ShowEnvironmentInfo(envInfo *config.EnvironmentInfo) {
+	fmt.Println("🌍 Environment Information")
+	fmt.Println()
+	fmt.Printf("Environment: %s\n", envInfo.GetEnvironmentDescription())
+	fmt.Printf("Recommended mode: %s\n", envInfo.GetRecommendedMode().String())
+
+	if len(envInfo.Restrictions) > 0 {
+		fmt.Println()
+		fmt.Println("⚠️  Restrictions:")
+		for _, restriction := range envInfo.Restrictions {
+			fmt.Printf("   • %s\n", restriction)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("📋 Compatibility Matrix:")
+	fmt.Println("   Environment    | Local Mode | Remote Mode | Recommended")
+	fmt.Println("   --------------|------------|-------------|------------")
+	fmt.Println("   GCP VM        | ✅ Yes      | ✅ Yes       | Local (cost)")
+	fmt.Println("   Container     | ❌ No       | ✅ Yes       | Remote (only)")
+	fmt.Println("   Local Machine | ❌ No       | ✅ Yes       | Remote (safe)")
 }

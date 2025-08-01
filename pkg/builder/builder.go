@@ -13,57 +13,157 @@ import (
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
-// Builder handles the image cache creation process
+// Builder orchestrates the disk image building process
 type Builder struct {
-	config      *config.Config
-	gcpClient   *gcp.Client
-	logger      *log.Logger
-	authManager *auth.Manager
-	vmManager   *vm.Manager
-	diskManager *disk.Manager
-	imageCache  *image.Cache
+	config    *config.Config
+	logger    *log.Logger
+	authMgr   *auth.Manager
+	vmMgr     *vm.Manager
+	diskMgr   *disk.Manager
+	imageMgr  *image.Cache
+	gcpClient *gcp.Client
 }
 
 // NewBuilder creates a new Builder instance
 func NewBuilder(cfg *config.Config) (*Builder, error) {
-	// Initialize logger (console only, no GCS)
-	logger := log.NewConsoleLogger(cfg.Verbose, cfg.Quiet)
+	// Create logger
+	logger := log.NewLogger(cfg.GCSPath)
 
-	// Initialize GCP client
+	// Create GCP client
 	gcpClient, err := gcp.NewClient(cfg.ProjectName, cfg.GCPOAuth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCP client: %w", err)
 	}
 
-	// Initialize managers
-	authManager := auth.NewManager(cfg.GCPOAuth, cfg.ImagePullAuth)
-	vmManager := vm.NewManager(gcpClient, logger)
-	diskManager := disk.NewManager(gcpClient, logger)
-	imageCache := image.NewCache(logger)
+	// Create managers
+	authMgr := auth.NewManager(cfg.GCPOAuth, cfg.ImagePullAuth)
+	vmMgr := vm.NewManager(gcpClient, logger, cfg)
+	diskMgr := disk.NewManager(gcpClient, logger, cfg)
+	imageMgr := image.NewCache(logger)
 
 	return &Builder{
-		config:      cfg,
-		gcpClient:   gcpClient,
-		logger:      logger,
-		authManager: authManager,
-		vmManager:   vmManager,
-		diskManager: diskManager,
-		imageCache:  imageCache,
+		config:    cfg,
+		logger:    logger,
+		authMgr:   authMgr,
+		vmMgr:     vmMgr,
+		diskMgr:   diskMgr,
+		imageMgr:  imageMgr,
+		gcpClient: gcpClient,
 	}, nil
 }
 
-// BuildImageCache orchestrates the entire image cache creation process
-func (b *Builder) BuildImageCache(ctx context.Context) error {
-	b.logger.Info("Starting image cache build process")
-	b.logger.Infof("Disk image name: %s", b.config.DiskImageName)
-	b.logger.Infof("Container images: %v", b.config.ContainerImages)
+// BuildDiskImage executes the complete disk image building process
+func (b *Builder) BuildDiskImage(ctx context.Context) error {
+	b.logger.Info("Starting disk image build process")
 
-	workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache)
-
-	if err := workflow.Execute(ctx); err != nil {
-		return fmt.Errorf("workflow execution failed: %w", err)
+	// Validate environment
+	envInfo, err := config.ValidateEnvironment(b.config.Mode)
+	if err != nil {
+		return fmt.Errorf("environment validation failed: %w", err)
 	}
 
-	b.logger.Success("Image cache build completed successfully")
+	b.logger.Info(fmt.Sprintf("Environment: %s", envInfo.GetEnvironmentDescription()))
+	b.logger.Info(fmt.Sprintf("Execution Mode: %s", b.config.Mode.String()))
+
+	// Setup authentication
+	if err := b.authMgr.ValidateAll(ctx); err != nil {
+		return fmt.Errorf("authentication setup failed: %w", err)
+	}
+
+	// Execute based on mode
+	if b.config.IsLocalMode() {
+		return b.buildLocal(ctx)
+	} else {
+		return b.buildRemote(ctx)
+	}
+}
+
+// buildLocal executes the build process on the current machine (GCP VM)
+func (b *Builder) buildLocal(ctx context.Context) error {
+	b.logger.Info("Executing local build on current GCP VM")
+
+	// Setup VM (install containerd locally)
+	if err := b.vmMgr.SetupVM(ctx, nil); err != nil {
+		return fmt.Errorf("local VM setup failed: %w", err)
+	}
+
+	// Create and attach disk
+	diskName, err := b.diskMgr.CreateAndAttach(ctx, "")
+	if err != nil {
+		return fmt.Errorf("disk creation failed: %w", err)
+	}
+
+	// Ensure cleanup
+	defer func() {
+		b.diskMgr.Cleanup(context.Background(), diskName)
+	}()
+
+	// Pull and cache images
+	for _, image := range b.config.ContainerImages {
+		if err := b.imageMgr.PullAndCache(ctx, image, &disk.Disk{Name: diskName}); err != nil {
+			return fmt.Errorf("image caching failed for %s: %w", image, err)
+		}
+	}
+
+	// Create final image
+	if err := b.diskMgr.CreateImage(ctx, diskName); err != nil {
+		return fmt.Errorf("image creation failed: %w", err)
+	}
+
+	b.logger.Info("Local build completed successfully")
+	return nil
+}
+
+// buildRemote executes the build process on a temporary GCP VM
+func (b *Builder) buildRemote(ctx context.Context) error {
+	b.logger.Info("Executing remote build on temporary GCP VM")
+
+	// Create temporary VM with startup script
+	vmInstance, err := b.vmMgr.CreateVM(ctx, &vm.Config{
+		Name:           fmt.Sprintf("disk-builder-%s", b.config.JobName),
+		Zone:           b.config.Zone,
+		MachineType:    "e2-standard-2",
+		Network:        b.config.Network,
+		Subnet:         b.config.Subnet,
+		ServiceAccount: b.config.ServiceAccount,
+	})
+	if err != nil {
+		return fmt.Errorf("remote VM creation failed: %w", err)
+	}
+
+	// Ensure VM cleanup
+	defer func() {
+		b.vmMgr.DeleteVM(context.Background(), vmInstance.Name, vmInstance.Zone)
+	}()
+
+	// Wait for VM to be ready and setup complete
+	if err := b.vmMgr.SetupVM(ctx, vmInstance); err != nil {
+		return fmt.Errorf("remote VM setup failed: %w", err)
+	}
+
+	// Create disk on the remote VM
+	diskName, err := b.diskMgr.CreateAndAttach(ctx, vmInstance.Name)
+	if err != nil {
+		return fmt.Errorf("remote disk creation failed: %w", err)
+	}
+
+	// Ensure disk cleanup
+	defer func() {
+		b.diskMgr.Cleanup(context.Background(), diskName)
+	}()
+
+	// Execute image caching on remote VM
+	for _, image := range b.config.ContainerImages {
+		if err := b.imageMgr.PullAndCache(ctx, image, &disk.Disk{Name: diskName}); err != nil {
+			return fmt.Errorf("remote image caching failed for %s: %w", image, err)
+		}
+	}
+
+	// Create final image from disk
+	if err := b.diskMgr.CreateImage(ctx, diskName); err != nil {
+		return fmt.Errorf("image creation failed: %w", err)
+	}
+
+	b.logger.Info("Remote build completed successfully")
 	return nil
 }
