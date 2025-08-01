@@ -202,7 +202,7 @@ Performance Optimization:
     • Consider --machine-type=e2-standard-4 for faster builds
     • Group related images in single cache for efficiency
 
-Need more help? Visit: https://github.com/ai-on-gke/tools/tree/main/gke-image-cache-builder`
+Need more help? Visit: https://github.com/0x00fafa/gke-image-cache-builder`
 
 const configHelpTemplate = `{{.DisplayName}} - Configuration File Guide
 
