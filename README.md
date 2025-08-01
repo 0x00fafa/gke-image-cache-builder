@@ -406,8 +406,8 @@ gke-image-cache-builder --generate-config ci-cd --output .github/gke-cache.yaml
 # Use in GitHub Actions
 gke-image-cache-builder --config .github/gke-cache.yaml \
    --disk-image-name=ci-cache-${{ github.run_id }} \
-   --cache-labels=build-id=${{ github.run_id }} \
-   --cache-labels=branch=${{ github.ref_name }}
+   --disk-labels=build-id=${{ github.run_id }} \
+   --disk-labels=branch=${{ github.ref_name }}
 ```
 
 #### Configuration with Environment Variables
