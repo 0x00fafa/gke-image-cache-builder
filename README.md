@@ -18,81 +18,258 @@ Accelerate pod startup by pre-caching container images at the disk level, elimin
 └────────────────────┘    └────────────────────┘    └────────────┘
 ```
 
-## 📊 Comparison with Original Project
+## 📦 Installation & Usage
 
-### Original Project Limitations
+### 🐳 Docker Usage (Recommended)
 
-After analyzing the original `gke-disk-image-builder`, we identified several key limitations:
+Docker provides the easiest way to use the tool without installing dependencies.
 
-| **Issue** | **Description** | **Impact** |
-|-----------|-----------------|------------|
-| 🏗️ **Cloud Build Dependency** | Required Google Cloud Build for execution | Limited flexibility, additional costs, complex setup |
-| 📝 **Shell Script Architecture** | Monolithic bash scripts with limited error handling | Hard to maintain, debug, and extend |
-| 🔧 **Limited Configuration** | Minimal customization options | Inflexible for different use cases |
-| 📋 **Poor User Experience** | Confusing parameter names, limited help system | Steep learning curve, error-prone usage |
-| 🚫 **No Local Execution** | Could only run in Cloud Build environment | Required cloud resources for every build |
-| 📊 **Minimal Logging** | Basic logging with no progress indicators | Poor visibility into build process |
-| 🔒 **Limited Auth Options** | Basic authentication support | Restricted registry access |
+#### **Interactive Mode (Recommended for Exploration)**
 
-### Our Improvements
+Start an interactive container with a shell to explore the tool:
 
-| **Category** | **Original** | **Our Implementation** | **Benefit** |
-|--------------|--------------|------------------------|-------------|
-| **Architecture** | Shell scripts | Modern Go with clean architecture | Maintainable, testable, extensible |
-| **Execution Modes** | Cloud Build only | Local + Remote modes | Cost-effective, flexible deployment |
-| **User Interface** | Basic CLI | Rich help system, context-aware errors | Better developer experience |
-| **Configuration** | Limited options | Comprehensive configuration | Supports diverse use cases |
-| **Logging** | Basic output | Structured logging with progress | Better observability |
-| **Error Handling** | Minimal | Comprehensive error handling | Reliable operation |
-| **Authentication** | Basic | Multiple auth mechanisms | Broader registry support |
-| **Resource Management** | Manual | Automatic cleanup | Prevents resource leaks |
+```bash
+# Basic interactive mode
+docker run -it gke-image-cache-builder
 
-## ✨ New Features
+# With volume mounts for configs and output
+docker run -it \
+  -v $(pwd)/configs:/app/configs:ro \
+  -v $(pwd)/output:/app/output \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder
+```
 
-### 🎯 **Dual Execution Modes**
-- **Local Mode (-L)**: Execute on current GCP VM (cost-effective)
-- **Remote Mode (-R)**: Create temporary GCP VM (works anywhere)
+**Inside the container, you can:**
+```bash
+# Show help
+gke-image-cache-builder --help
 
-### 📁 **YAML Configuration File Support**
-- Generate configuration templates for different use cases
-- Mix configuration files with command-line overrides
-- Environment-specific configurations (dev, staging, production)
-- Built-in validation and help system
+# Generate configuration templates
+gke-image-cache-builder --generate-config basic --output /app/output/my-config.yaml
 
-### 🛠️ **Enhanced Configuration**
-- Comprehensive parameter validation
-- Flexible timeout settings
-- Custom machine types and disk configurations
-- Advanced labeling and tagging
+# Build cache using configuration
+gke-image-cache-builder --config /app/configs/my-config.yaml
 
-### 📚 **Rich Help System**
-- Context-aware error messages with solutions
-- Comprehensive examples and scenarios
-- Multiple help levels (basic, full, examples, config)
+# Build cache with command line
+gke-image-cache-builder -L --project-name=my-project \
+    --disk-image-name=web-cache \
+    --container-image=nginx:latest
+```
 
-### 🔐 **Advanced Authentication**
-- Multiple registry authentication methods
-- Service account token support
-- Private registry access
+#### **Batch/Task Mode (Recommended for Automation)**
 
-### 📊 **Better Observability**
-- Structured console logging
-- Progress indicators
-- Verbose debugging options
-- Build status tracking
+Execute specific commands directly without entering the container:
 
-### 🧹 **Automatic Resource Management**
-- Automatic cleanup of temporary resources
-- Resource leak prevention
-- Cost optimization features
+```bash
+# Show help
+docker run --rm gke-image-cache-builder --help
 
-## 🗑️ Removed Features
+# Show version
+docker run --rm gke-image-cache-builder --version
 
-| **Feature** | **Reason for Removal** | **Alternative** |
-|-------------|------------------------|-----------------|
-| **Cloud Build Integration** | Added complexity and costs | Direct VM execution |
-| **GCS Logging** | Over-engineering for most use cases | Console logging with optional verbosity |
-| **Complex Shell Scripts** | Hard to maintain and debug | Clean Go implementation |
+# Generate configuration template
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  gke-image-cache-builder \
+  --generate-config basic --output /app/output/web-config.yaml
+
+# Build cache using configuration file
+docker run --rm \
+  -v $(pwd)/configs:/app/configs:ro \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/my-config.yaml
+
+# Build cache with command line parameters
+docker run --rm \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  -R --zone=us-west1-b --project-name=my-project \
+  --disk-image-name=web-cache \
+  --container-image=nginx:latest \
+  --container-image=redis:alpine
+```
+
+#### **Docker Volume Mounts**
+
+| Mount Point | Purpose | Example |
+|-------------|---------|---------|
+| `/app/configs` | Configuration files (read-only) | `-v $(pwd)/configs:/app/configs:ro` |
+| `/app/output` | Generated files and outputs | `-v $(pwd)/output:/app/output` |
+| `/app/credentials.json` | GCP service account key | `-v $(pwd)/sa.json:/app/credentials.json:ro` |
+
+#### **Docker Environment Variables**
+
+```bash
+# Set GCP credentials path
+-e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+
+# Set timezone
+-e TZ=America/New_York
+
+# Enable verbose logging
+-e VERBOSE=true
+```
+
+#### **Complete Docker Examples**
+
+**Web Application Cache:**
+```bash
+# Create configuration
+docker run --rm -v $(pwd):/workspace gke-image-cache-builder \
+  --generate-config basic --output /workspace/web-config.yaml
+
+# Edit the configuration file
+vim web-config.yaml
+
+# Build the cache
+docker run --rm \
+  -v $(pwd)/web-config.yaml:/app/configs/config.yaml:ro \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml
+```
+
+**CI/CD Pipeline Integration:**
+```bash
+# In your CI/CD pipeline
+docker run --rm \
+  -v $PWD/ci-config.yaml:/app/configs/config.yaml:ro \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
+  -v $GOOGLE_APPLICATION_CREDENTIALS:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml \
+  --disk-image-name=ci-cache-$BUILD_ID \
+  --disk-labels=build-id=$BUILD_ID
+```
+
+**ML/AI Workloads:**
+```bash
+# Generate ML-optimized configuration
+docker run --rm -v $(pwd):/workspace gke-image-cache-builder \
+  --generate-config ml --output /workspace/ml-config.yaml
+
+# Build large ML image cache
+docker run --rm \
+  -v $(pwd)/ml-config.yaml:/app/configs/config.yaml:ro \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml
+```
+
+#### **Docker Compose Usage**
+
+For complex setups, use Docker Compose:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  gke-cache-builder:
+    image: gke-image-cache-builder:latest
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./output:/app/output
+      - ./service-account.json:/app/credentials.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+    stdin_open: true
+    tty: true
+```
+
+```bash
+# Start interactive session
+docker-compose run --rm gke-cache-builder
+
+# Run specific task
+docker-compose run --rm gke-cache-builder --help
+```
+
+#### **Docker Best Practices**
+
+1. **Use specific tags in production:**
+   ```bash
+   docker run gke-image-cache-builder:v2.0.0 --help
+   ```
+
+2. **Mount volumes as read-only when possible:**
+   ```bash
+   -v $(pwd)/configs:/app/configs:ro
+   ```
+
+3. **Use environment variables for credentials:**
+   ```bash
+   -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+   ```
+
+4. **Clean up containers automatically:**
+   ```bash
+   docker run --rm gke-image-cache-builder --help
+   ```
+
+5. **Use Docker secrets for sensitive data:**
+   ```bash
+   echo "service-account-content" | docker secret create gcp-sa -
+   ```
+
+#### **Docker Troubleshooting**
+
+**Container exits immediately:**
+```bash
+# Check if you need interactive mode
+docker run -it gke-image-cache-builder
+
+# Check logs
+docker logs <container-id>
+```
+
+**Permission issues:**
+```bash
+# Check file permissions
+ls -la service-account.json
+
+# Fix permissions
+chmod 600 service-account.json
+```
+
+**Volume mount issues:**
+```bash
+# Use absolute paths
+docker run -v /absolute/path/to/configs:/app/configs:ro gke-image-cache-builder
+
+# Check if files exist
+docker run --rm -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder ls -la /app/configs
+```
+
+### 📥 Binary Installation
+
+#### Download Pre-built Binary
+```bash
+# Linux AMD64
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-linux-amd64 -o gke-image-cache-builder
+chmod +x gke-image-cache-builder
+
+# macOS AMD64
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-amd64 -o gke-image-cache-builder
+chmod +x gke-image-cache-builder
+
+# macOS ARM64 (Apple Silicon)
+curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-arm64 -o gke-image-cache-builder
+chmod +x gke-image-cache-builder
+```
+
+#### Build from Source
+```bash
+git clone https://github.com/0x00fafa/gke-image-cache-builder.git
+cd gke-image-cache-builder
+make build-static
+```
+
+#### Using Go Install
+```bash
+go install github.com/0x00fafa/gke-image-cache-builder/cmd@latest
+```
 
 ## 📁 Configuration File Support
 
@@ -147,7 +324,7 @@ execution:
 project:
   name: my-project
 
-disk:  # 改为 disk
+disk:
   name: web-app-cache
   size_gb: 20
   labels:
@@ -228,86 +405,124 @@ gke-image-cache-builder --help-config
 - GCP project with Compute Engine API enabled
 - Appropriate IAM permissions
 - For local mode: Must run on a GCP VM instance
+- For Docker: Docker installed and running
 
-### Method 1: Configuration File (Recommended)
+### Method 1: Docker + Configuration File (Recommended)
 ```bash
 # Generate a configuration template
-gke-image-cache-builder --generate-config basic --output web-app.yaml
+docker run --rm -v $(pwd):/workspace gke-image-cache-builder \
+  --generate-config basic --output /workspace/web-app.yaml
 
 # Edit the configuration file
 # vim web-app.yaml
 
 # Build using configuration
-gke-image-cache-builder --config web-app.yaml
+docker run --rm \
+  -v $(pwd)/web-app.yaml:/app/configs/config.yaml:ro \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml
 ```
 
-### Method 2: Command Line (Traditional)
+### Method 2: Docker + Command Line
 ```bash
-# Local Mode (Cost-Effective)
-gke-image-cache-builder -L \
-    --project-name=my-project \
-    --disk-image-name=web-cache \
-    --container-image=nginx:latest \
-    --container-image=redis:alpine
+# Local Mode (Cost-Effective) - requires running on GCP VM
+docker run --rm \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  -L --project-name=my-project \
+  --disk-image-name=web-cache \
+  --container-image=nginx:latest \
+  --container-image=redis:alpine
 
-# Remote Mode (Universal)
-gke-image-cache-builder -R \
-    --zone=us-west1-b \
-    --project-name=my-project \
-    --disk-image-name=web-cache \
-    --container-image=nginx:latest \
-    --container-image=redis:alpine
+# Remote Mode (Universal) - works from anywhere
+docker run --rm \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  -R --zone=us-west1-b \
+  --project-name=my-project \
+  --disk-image-name=web-cache \
+  --container-image=nginx:latest \
+  --container-image=redis:alpine
 ```
 
-### Method 3: Hybrid Approach
+### Method 3: Interactive Docker Mode
 ```bash
-# Use config file but override specific parameters
-gke-image-cache-builder --config production.yaml \
-    --project-name=staging-project \
-    --disk-image-name=staging-cache
+# Start interactive container
+docker run -it \
+  -v $(pwd)/configs:/app/configs:ro \
+  -v $(pwd)/output:/app/output \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder
+
+# Inside the container:
+gke-image-cache-builder --generate-config basic --output /app/output/my-config.yaml
+gke-image-cache-builder --config /app/configs/my-config.yaml
 ```
 
-## 📦 Installation
-
-### Download Pre-built Binary
+### Method 4: Binary Installation (Traditional)
 ```bash
-# Linux AMD64
+# Download and install binary
 curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-linux-amd64 -o gke-image-cache-builder
 chmod +x gke-image-cache-builder
 
-# macOS AMD64
-curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-amd64 -o gke-image-cache-builder
-chmod +x gke-image-cache-builder
+# Use configuration file
+./gke-image-cache-builder --config web-app.yaml
 
-# macOS ARM64 (Apple Silicon)
-curl -L https://github.com/0x00fafa/gke-image-cache-builder/releases/latest/download/gke-image-cache-builder-darwin-arm64 -o gke-image-cache-builder
-chmod +x gke-image-cache-builder
-```
-
-### Build from Source
-```bash
-git clone https://github.com/0x00fafa/gke-image-cache-builder.git
-cd gke-image-cache-builder
-make build-static
-```
-
-### Using Go Install
-```bash
-go install github.com/0x00fafa/gke-image-cache-builder/cmd@latest
+# Use command line
+./gke-image-cache-builder -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
 ```
 
 ## 📖 Usage
 
 ### Basic Syntax
 ```
-# Command line approach
+# Docker approach (recommended)
+docker run [docker-options] gke-image-cache-builder [tool-options]
+
+# Binary approach
 gke-image-cache-builder {-L|-R} --project-name <PROJECT> --disk-image-name <NAME> [OPTIONS]
-
-# Configuration file approach  
 gke-image-cache-builder --config <CONFIG_FILE> [OPTIONS]
+```
 
-# Hybrid approach (config + CLI overrides)
-gke-image-cache-builder --config <CONFIG_FILE> [CLI_OVERRIDES]
+### Docker Usage Patterns
+
+#### **Pattern 1: One-shot Commands**
+```bash
+# Show help
+docker run --rm gke-image-cache-builder --help
+
+# Generate config
+docker run --rm -v $(pwd):/workspace gke-image-cache-builder \
+  --generate-config basic --output /workspace/config.yaml
+
+# Execute build
+docker run --rm -v $(pwd)/config.yaml:/app/config.yaml:ro gke-image-cache-builder \
+  --config /app/config.yaml
+```
+
+#### **Pattern 2: Interactive Session**
+```bash
+# Start interactive session
+docker run -it -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder
+
+# Inside container, run multiple commands
+gke-image-cache-builder --help
+gke-image-cache-builder --generate-config advanced --output /app/configs/advanced.yaml
+gke-image-cache-builder --config /app/configs/my-config.yaml
+exit
+```
+
+#### **Pattern 3: Docker Compose Workflow**
+```bash
+# Start services
+docker-compose up -d
+
+# Run interactive session
+docker-compose exec gke-cache-builder bash
+
+# Run specific tasks
+docker-compose run --rm gke-cache-builder --help
 ```
 
 ### Configuration File Parameters
@@ -334,50 +549,47 @@ gke-image-cache-builder --config <CONFIG_FILE> [CLI_OVERRIDES]
 
 ### Advanced Examples
 
-#### Multi-Environment Setup
+#### Multi-Environment Setup with Docker
 ```bash
 # Development
-gke-image-cache-builder --config configs/dev.yaml
+docker run --rm -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder \
+  --config /app/configs/dev.yaml
 
 # Staging  
-gke-image-cache-builder --config configs/staging.yaml
+docker run --rm -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder \
+  --config /app/configs/staging.yaml
 
 # Production
-gke-image-cache-builder --config configs/production.yaml
+docker run --rm -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder \
+  --config /app/configs/production.yaml
 ```
 
-#### CI/CD Integration with Configuration
+#### CI/CD Integration with Docker
 ```bash
-# Generate CI/CD optimized config
-gke-image-cache-builder --generate-config ci-cd --output .github/gke-cache.yaml
-
-# Use in GitHub Actions
-gke-image-cache-builder --config .github/gke-cache.yaml \
-    --disk-image-name=ci-cache-${{ github.run_id }} \
-    --cache-labels=build-id=${{ github.run_id }} \
-    --cache-labels=branch=${{ github.ref_name }}
+# In your CI/CD pipeline (GitHub Actions, GitLab CI, etc.)
+docker run --rm \
+  -v $PWD/ci-config.yaml:/app/configs/config.yaml:ro \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
+  -v $GOOGLE_APPLICATION_CREDENTIALS:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml \
+  --disk-image-name=ci-cache-$BUILD_ID \
+  --disk-labels=build-id=$BUILD_ID \
+  --disk-labels=branch=$BRANCH_NAME
 ```
 
-#### Configuration with Environment Variables
-```yaml
-# config.yaml with environment variable placeholders
-project:
-  name: ${GCP_PROJECT}
-  
-disk:  # 改为 disk
-  name: ${CACHE_NAME:-default-cache}
-  labels:
-    build-id: ${BUILD_ID}
-    branch: ${GIT_BRANCH}
-```
-
-#### ML/AI Workload Configuration
+#### ML/AI Workload with Docker
 ```bash
 # Generate ML-optimized configuration
-gke-image-cache-builder --generate-config ml --output ml-config.yaml
+docker run --rm -v $(pwd):/workspace gke-image-cache-builder \
+  --generate-config ml --output /workspace/ml-config.yaml
 
-# Use for ML workloads
-gke-image-cache-builder --config ml-config.yaml
+# Build ML image cache
+docker run --rm \
+  -v $(pwd)/ml-config.yaml:/app/configs/config.yaml:ro \
+  -v $(pwd)/service-account.json:/app/credentials.json:ro \
+  gke-image-cache-builder \
+  --config /app/configs/config.yaml
 ```
 
 ## 💡 Benefits
@@ -389,6 +601,7 @@ gke-image-cache-builder --config ml-config.yaml
 | ⚡ **Faster Scaling** | Instant pod startup enables rapid scaling | Better auto-scaling responsiveness |
 | 🔄 **Reusable Cache** | Cache disks can be attached to multiple nodes | Efficient resource utilization |
 | 🛡️ **Reliability** | Reduce dependency on external registries | More resilient deployments |
+| 🐳 **Container Ready** | Docker support for easy deployment | Works anywhere Docker runs |
 
 ## 🔧 Advanced Configuration
 
@@ -412,8 +625,8 @@ gke-image-cache-builder --config ml-config.yaml
 --disk-type=pd-ssd  # or pd-standard, pd-balanced
 
 # Image family and labels
---disk-family=my-cache-family  # 改为 disk-family
---disk-labels=env=prod --disk-labels=team=platform  # 改为 disk-labels
+--disk-family=my-cache-family
+--disk-labels=env=prod --disk-labels=team=platform
 ```
 
 ## 🆘 Help System
@@ -427,8 +640,14 @@ gke-image-cache-builder --help-full
 # Usage examples and scenarios
 gke-image-cache-builder --help-examples
 
+# Configuration file help
+gke-image-cache-builder --help-config
+
 # Version information
 gke-image-cache-builder --version
+
+# Docker-specific help
+docker run --rm gke-image-cache-builder help
 ```
 
 ## 🐛 Troubleshooting
@@ -439,6 +658,9 @@ gke-image-cache-builder --version
 ```bash
 # Solution: Use remote mode or run on a GCP VM
 gke-image-cache-builder -R --zone=us-west1-b ...
+
+# Docker solution: Remote mode works from anywhere
+docker run --rm gke-image-cache-builder -R --zone=us-west1-b ...
 ```
 
 **Permission denied errors**
@@ -447,12 +669,36 @@ gke-image-cache-builder -R --zone=us-west1-b ...
 # - Compute Instance Admin (v1)
 # - Compute Image User
 # - Service Account User
+
+# Docker: Check file permissions
+chmod 600 service-account.json
 ```
 
 **Large images timeout**
 ```bash
 # Increase timeout for large images
 --timeout=60m
+
+# Docker example
+docker run --rm gke-image-cache-builder --config=/app/config.yaml --timeout=60m
+```
+
+**Docker container exits immediately**
+```bash
+# Use interactive mode for exploration
+docker run -it gke-image-cache-builder
+
+# Check if you're using the right command
+docker run --rm gke-image-cache-builder --help
+```
+
+**Volume mount issues**
+```bash
+# Use absolute paths
+docker run -v /absolute/path/to/configs:/app/configs:ro gke-image-cache-builder
+
+# Check if files exist in container
+docker run --rm -v $(pwd)/configs:/app/configs:ro gke-image-cache-builder ls -la /app/configs
 ```
 
 ## 🤝 Contributing
@@ -471,6 +717,19 @@ make build
 ```bash
 make test
 make test-binary
+make docker-test
+```
+
+### Docker Development
+```bash
+# Build development image
+make docker-build
+
+# Test Docker functionality
+make docker-test
+
+# Run interactive development container
+make docker-interactive
 ```
 
 ## 📄 License
@@ -482,12 +741,14 @@ Apache 2.0 - see [LICENSE](LICENSE) file for details.
 - Original [gke-disk-image-builder](https://github.com/ai-on-gke/tools/tree/main/gke-disk-image-builder) project for inspiration
 - Google Cloud Platform team for GKE and container optimization guidance
 - Go community for excellent tooling and libraries
+- Docker community for containerization best practices
 
 ## 📞 Support
 
 - 📖 [Documentation](https://github.com/0x00fafa/gke-image-cache-builder/wiki)
 - 🐛 [Issue Tracker](https://github.com/0x00fafa/gke-image-cache-builder/issues)
 - 💬 [Discussions](https://github.com/0x00fafa/gke-image-cache-builder/discussions)
+- 🐳 [Docker Hub](https://hub.docker.com/r/0x00fafa/gke-image-cache-builder)
 
 ---
 
