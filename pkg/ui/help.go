@@ -123,12 +123,18 @@ COMMON OPTIONS:
         --help-examples          Show usage examples
         --help-config            Show configuration file help
 
+NETWORK OPTIONS (Remote Mode Only):
+    -n, --network <NETWORK>      VPC network for temporary VM (default: default)
+    -u, --subnet <SUBNET>        Subnet for temporary VM (default: default)
+                                 Note: These settings only affect the build VM,
+                                 not the final disk image
+
 IMAGE MANAGEMENT:
-    --disk-family <FAMILY>     Image family name (default: gke-image-cache)
-    --disk-labels <KEY=VALUE>  Disk labels (repeatable)
-                               Example: --disk-labels env=prod
+    --disk-family <FAMILY>       Image family name (default: gke-image-cache)
+    --disk-labels <KEY=VALUE>    Disk labels (repeatable)
+                                 Example: --disk-labels env=prod
     --image-pull-policy <POLICY> Image pull behavior
-                               Options: Always, IfNotPresent (default)
+                                 Options: Always, IfNotPresent (default)
 
 QUICK START:
     # Generate a configuration template
@@ -298,9 +304,11 @@ images:
   - nginx:1.21
   - redis:6.2-alpine
 
+# Network settings for temporary build VM (remote mode only)
+# These settings do NOT affect the final disk image
 network:
-  network: production-vpc
-  subnet: production-subnet
+  network: production-vpc    # VPC for build VM
+  subnet: production-subnet  # Subnet for build VM
 
 advanced:
   timeout: 45m
@@ -377,9 +385,11 @@ images:                        # Container images list
   - image:tag
   - registry/image:tag
 
+# Network settings for build VM only (remote mode)
+# These do NOT affect the final disk image
 network:
-  network: <network>           # VPC network
-  subnet: <subnet>             # Subnet
+  network: <network>           # VPC network for build VM
+  subnet: <subnet>             # Subnet for build VM
 
 advanced:
   timeout: <duration>          # Build timeout (e.g., 30m, 1h)

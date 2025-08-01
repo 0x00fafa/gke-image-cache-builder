@@ -278,7 +278,9 @@ images:
   - redis:alpine
   - postgres:13
 
-# Optional network configuration
+# Optional network configuration for build VM (remote mode only)
+# These settings only affect the temporary VM used for building,
+# NOT the final disk image
 # network:
 #   network: default
 #   subnet: default
@@ -333,10 +335,12 @@ images:
   - redis:6.2-alpine
   - postgres:13
 
-# Network configuration
+# Network configuration for build VM (remote mode only)
+# IMPORTANT: These settings only affect the temporary VM used for building.
+# They do NOT affect the final disk image or how it will be used.
 network:
-  network: production-vpc
-  subnet: production-subnet
+  network: production-vpc      # VPC network for build VM
+  subnet: production-subnet    # Subnet for build VM
 
 # Advanced settings
 advanced:
@@ -388,7 +392,8 @@ images:
   - nginx:1.21
   - redis:6.2-alpine
 
-# Network configuration
+# Network configuration for CI/CD build VM
+# These settings only affect the temporary build VM, not the final disk image
 network:
   network: default
   subnet: default
@@ -452,7 +457,9 @@ images:
   - gcr.io/ml-platform-project/data-processor:v1.5.0
   - gcr.io/ml-platform-project/model-server:v2.1.0
 
-# Network configuration
+# Network configuration for ML build VM
+# These settings only affect the temporary build VM, not the final disk image
+# Use appropriate network for accessing ML model registries and datasets
 network:
   network: ml-vpc
   subnet: ml-subnet

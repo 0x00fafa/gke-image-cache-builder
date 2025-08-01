@@ -170,7 +170,7 @@ execution:
 project:
   name: production-project
 
-disk:  # 改为 disk
+disk:
   name: microservices-cache
   size_gb: 50
   family: production-cache
@@ -187,6 +187,8 @@ images:
   - nginx:1.21
   - redis:6.2-alpine
 
+# Network settings for build VM only (remote mode)
+# These do NOT affect the final disk image
 network:
   network: production-vpc
   subnet: production-subnet
@@ -314,14 +316,14 @@ gke-image-cache-builder --config <CONFIG_FILE> [CLI_OVERRIDES]
 | `execution` | `mode` | Execution mode | `local` or `remote` |
 | `execution` | `zone` | GCP zone | `us-west1-b` |
 | `project` | `name` | GCP project name | `my-project` |
-| `disk` | `name` | Disk image name | `web-app-cache` |  # 改为 disk
-| `disk` | `size_gb` | Disk size in GB | `20` |  # 改为 disk
-| `disk` | `family` | Image family | `web-cache` |  # 改为 disk
-| `disk` | `disk_type` | Disk type | `pd-ssd` |  # 改为 disk
-| `disk` | `labels` | Key-value labels | `env: production` |  # 改为 disk
+| `disk` | `name` | Disk image name | `web-app-cache` |
+| `disk` | `size_gb` | Disk size in GB | `20` |
+| `disk` | `family` | Image family | `web-cache` |
+| `disk` | `disk_type` | Disk type | `pd-ssd` |
+| `disk` | `labels` | Key-value labels | `env: production` |
 | `images` | - | Container images list | `- nginx:latest` |
-| `network` | `network` | VPC network | `my-vpc` |
-| `network` | `subnet` | Subnet | `my-subnet` |
+| `network` | `network` | VPC network for build VM only | `my-vpc` |
+| `network` | `subnet` | Subnet for build VM only | `my-subnet` |
 | `advanced` | `timeout` | Build timeout | `45m` |
 | `advanced` | `machine_type` | VM machine type | `e2-standard-4` |
 | `advanced` | `preemptible` | Use preemptible VM | `true` |
@@ -390,21 +392,11 @@ gke-image-cache-builder --config ml-config.yaml
 
 ## 🔧 Advanced Configuration
 
-### Authentication Options
-```bash
-# Service account file
---gcp-oauth=/path/to/service-account.json
-
-# Service account email
---service-account=my-sa@project.iam.gserviceaccount.com
-
-# Image pull authentication
---image-pull-auth=ServiceAccountToken
-```
-
 ### Network Configuration
 ```bash
-# Custom VPC and subnet
+# Custom VPC and subnet for build VM (remote mode only)
+# These settings only affect the temporary VM used for building,
+# NOT the final disk image
 --network=my-vpc --subnet=my-subnet
 
 # Machine type for remote builds

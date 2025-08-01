@@ -55,10 +55,10 @@ func main() {
 	// Zone and location
 	flag.StringVar(&cfg.Zone, "z", "", "GCP zone (required for -R mode)")
 	flag.StringVar(&cfg.Zone, "zone", "", "GCP zone (required for -R mode)")
-	flag.StringVar(&cfg.Network, "n", cfg.Network, "VPC network")
-	flag.StringVar(&cfg.Network, "network", cfg.Network, "VPC network")
-	flag.StringVar(&cfg.Subnet, "u", cfg.Subnet, "Subnet")
-	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet")
+	flag.StringVar(&cfg.Network, "n", cfg.Network, "VPC network for build VM (remote mode only)")
+	flag.StringVar(&cfg.Network, "network", cfg.Network, "VPC network for build VM (remote mode only)")
+	flag.StringVar(&cfg.Subnet, "u", cfg.Subnet, "Subnet for build VM (remote mode only)")
+	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet for build VM (remote mode only)")
 
 	// Cache configuration
 	flag.IntVar(&cfg.DiskSizeGB, "s", cfg.DiskSizeGB, "Disk size in GB")         // 改为 DiskSizeGB
