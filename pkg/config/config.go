@@ -25,16 +25,16 @@ type Config struct {
 	ContainerImages []string
 
 	// Optional fields with defaults
-	CacheFamilyName string
-	CacheLabels     map[string]string
-	JobName         string
-	GCPOAuth        string
-	CacheSizeGB     int
-	ImagePullAuth   string
-	Timeout         time.Duration
-	Network         string
-	Subnet          string
-	ServiceAccount  string
+	DiskFamilyName string            // 改为 DiskFamilyName
+	DiskLabels     map[string]string // 改为 DiskLabels
+	JobName        string
+	GCPOAuth       string
+	DiskSizeGB     int // 改为 DiskSizeGB
+	ImagePullAuth  string
+	Timeout        time.Duration
+	Network        string
+	Subnet         string
+	ServiceAccount string
 
 	// Advanced options
 	MachineType string
@@ -49,18 +49,18 @@ type Config struct {
 // NewConfig creates a new configuration with defaults
 func NewConfig() *Config {
 	return &Config{
-		Mode:            ModeUnspecified,
-		CacheFamilyName: "gke-image-cache",
-		JobName:         "image-cache-build",
-		CacheSizeGB:     10,
-		ImagePullAuth:   "None",
-		Timeout:         20 * time.Minute,
-		Network:         "default",
-		Subnet:          "default",
-		ServiceAccount:  "default",
-		MachineType:     "e2-standard-2",
-		DiskType:        "pd-standard",
-		CacheLabels:     make(map[string]string),
+		Mode:           ModeUnspecified,
+		DiskFamilyName: "gke-image-cache", // 改为 DiskFamilyName
+		JobName:        "image-cache-build",
+		DiskSizeGB:     10, // 改为 DiskSizeGB
+		ImagePullAuth:  "None",
+		Timeout:        20 * time.Minute,
+		Network:        "default",
+		Subnet:         "default",
+		ServiceAccount: "default",
+		MachineType:    "e2-standard-2",
+		DiskType:       "pd-standard",
+		DiskLabels:     make(map[string]string), // 改为 DiskLabels
 	}
 }
 

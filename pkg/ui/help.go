@@ -116,12 +116,19 @@ REQUIRED:
 
 COMMON OPTIONS:
     -z, --zone <ZONE>            GCP zone (required for -R mode)
-    -s, --cache-size <GB>        Cache disk size in GB (default: 10)
+    -s, --disk-size <GB>         Disk size in GB (default: 10)
     -t, --timeout <DURATION>     Build timeout (default: 20m)
     -h, --help                   Show this help
         --help-full              Show all options
         --help-examples          Show usage examples
         --help-config            Show configuration file help
+
+IMAGE MANAGEMENT:
+    --disk-family <FAMILY>     Image family name (default: gke-image-cache)
+    --disk-labels <KEY=VALUE>  Disk labels (repeatable)
+                               Example: --disk-labels env=prod
+    --image-pull-policy <POLICY> Image pull behavior
+                               Options: Always, IfNotPresent (default)
 
 QUICK START:
     # Generate a configuration template
@@ -249,7 +256,7 @@ execution:
 project:
   name: my-project
 
-cache:
+disk:
   name: web-app-cache
   size_gb: 20
   family: web-cache
@@ -276,7 +283,7 @@ execution:
 project:
   name: production-project
 
-cache:
+disk:
   name: microservices-cache
   size_gb: 50
   family: production-cache
@@ -358,7 +365,7 @@ execution:
 project:
   name: <project>              # GCP project name
 
-cache:
+disk:
   name: <name>                 # Disk image name
   size_gb: <size>              # Disk size (10-1000)
   family: <family>             # Image family

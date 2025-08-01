@@ -249,7 +249,7 @@ FULL EXAMPLE:
 `, e.toolInfo.ExecutableName)
 }
 
-func (e *ErrorHandler) showDiskImageNameError() { // 修改函数名
+func (e *ErrorHandler) showDiskImageNameError() {
 	fmt.Printf(`Error: Disk image name required
 
 SOLUTION:

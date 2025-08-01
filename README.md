@@ -147,7 +147,7 @@ execution:
 project:
   name: my-project
 
-cache:
+disk:  # 改为 disk
   name: web-app-cache
   size_gb: 20
   labels:
@@ -170,7 +170,7 @@ execution:
 project:
   name: production-project
 
-cache:
+disk:  # 改为 disk
   name: microservices-cache
   size_gb: 50
   family: production-cache
@@ -314,11 +314,11 @@ gke-image-cache-builder --config <CONFIG_FILE> [CLI_OVERRIDES]
 | `execution` | `mode` | Execution mode | `local` or `remote` |
 | `execution` | `zone` | GCP zone | `us-west1-b` |
 | `project` | `name` | GCP project name | `my-project` |
-| `cache` | `name` | Disk image name | `web-app-cache` |
-| `cache` | `size_gb` | Disk size in GB | `20` |
-| `cache` | `family` | Image family | `web-cache` |
-| `cache` | `disk_type` | Disk type | `pd-ssd` |
-| `cache` | `labels` | Key-value labels | `env: production` |
+| `disk` | `name` | Disk image name | `web-app-cache` |  # 改为 disk
+| `disk` | `size_gb` | Disk size in GB | `20` |  # 改为 disk
+| `disk` | `family` | Image family | `web-cache` |  # 改为 disk
+| `disk` | `disk_type` | Disk type | `pd-ssd` |  # 改为 disk
+| `disk` | `labels` | Key-value labels | `env: production` |  # 改为 disk
 | `images` | - | Container images list | `- nginx:latest` |
 | `network` | `network` | VPC network | `my-vpc` |
 | `network` | `subnet` | Subnet | `my-subnet` |
@@ -362,7 +362,7 @@ gke-image-cache-builder --config .github/gke-cache.yaml \
 project:
   name: ${GCP_PROJECT}
   
-cache:
+disk:  # 改为 disk
   name: ${CACHE_NAME:-default-cache}
   labels:
     build-id: ${BUILD_ID}
@@ -420,8 +420,8 @@ gke-image-cache-builder --config ml-config.yaml
 --disk-type=pd-ssd  # or pd-standard, pd-balanced
 
 # Image family and labels
---cache-family=my-cache-family
---cache-labels=env=prod --cache-labels=team=platform
+--disk-family=my-cache-family  # 改为 disk-family
+--disk-labels=env=prod --disk-labels=team=platform  # 改为 disk-labels
 ```
 
 ## 🆘 Help System

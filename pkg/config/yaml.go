@@ -14,7 +14,7 @@ import (
 type YAMLConfig struct {
 	Execution ExecutionConfig `yaml:"execution"`
 	Project   ProjectConfig   `yaml:"project"`
-	Cache     CacheConfig     `yaml:"cache"`
+	Disk      DiskConfig      `yaml:"disk"` // 改为 Disk
 	Images    []string        `yaml:"images"`
 	Network   NetworkConfig   `yaml:"network,omitempty"`
 	Advanced  AdvancedConfig  `yaml:"advanced,omitempty"`
@@ -31,7 +31,7 @@ type ProjectConfig struct {
 	Name string `yaml:"name"`
 }
 
-type CacheConfig struct {
+type DiskConfig struct { // 改为 DiskConfig
 	Name     string            `yaml:"name"`
 	SizeGB   int               `yaml:"size_gb,omitempty"`
 	Family   string            `yaml:"family,omitempty"`
@@ -118,31 +118,31 @@ func (c *Config) applyYAMLConfig(yamlConfig *YAMLConfig, filePath string) error 
 		c.ProjectName = yamlConfig.Project.Name
 	}
 
-	// Cache configuration
-	if c.DiskImageName == "" && yamlConfig.Cache.Name != "" {
-		c.DiskImageName = yamlConfig.Cache.Name
+	// Disk configuration (原来的 Cache configuration)
+	if c.DiskImageName == "" && yamlConfig.Disk.Name != "" {
+		c.DiskImageName = yamlConfig.Disk.Name
 	}
 
-	if c.CacheSizeGB == 10 && yamlConfig.Cache.SizeGB > 0 { // 10 is default
-		c.CacheSizeGB = yamlConfig.Cache.SizeGB
+	if c.DiskSizeGB == 10 && yamlConfig.Disk.SizeGB > 0 { // 10 is default
+		c.DiskSizeGB = yamlConfig.Disk.SizeGB
 	}
 
-	if c.CacheFamilyName == "gke-image-cache" && yamlConfig.Cache.Family != "" { // default value
-		c.CacheFamilyName = yamlConfig.Cache.Family
+	if c.DiskFamilyName == "gke-image-cache" && yamlConfig.Disk.Family != "" { // default value
+		c.DiskFamilyName = yamlConfig.Disk.Family
 	}
 
-	if c.DiskType == "pd-standard" && yamlConfig.Cache.DiskType != "" { // default value
-		c.DiskType = yamlConfig.Cache.DiskType
+	if c.DiskType == "pd-standard" && yamlConfig.Disk.DiskType != "" { // default value
+		c.DiskType = yamlConfig.Disk.DiskType
 	}
 
 	// Labels (merge with existing)
-	if len(yamlConfig.Cache.Labels) > 0 {
-		if c.CacheLabels == nil {
-			c.CacheLabels = make(map[string]string)
+	if len(yamlConfig.Disk.Labels) > 0 {
+		if c.DiskLabels == nil {
+			c.DiskLabels = make(map[string]string)
 		}
-		for k, v := range yamlConfig.Cache.Labels {
-			if _, exists := c.CacheLabels[k]; !exists { // Don't override CLI labels
-				c.CacheLabels[k] = v
+		for k, v := range yamlConfig.Disk.Labels {
+			if _, exists := c.DiskLabels[k]; !exists { // Don't override CLI labels
+				c.DiskLabels[k] = v
 			}
 		}
 	}
@@ -264,9 +264,9 @@ execution:
 project:
   name: my-project  # Replace with your GCP project name
 
-cache:
+disk:
   name: web-app-cache  # Name for the disk image
-  size_gb: 10  # Cache disk size in GB
+  size_gb: 10  # Disk size in GB
   family: gke-image-cache  # Image family name
   labels:
     env: development
@@ -312,9 +312,9 @@ execution:
 project:
   name: production-project  # GCP project name
 
-cache:
+disk:
   name: microservices-cache  # Disk image name
-  size_gb: 50  # Cache disk size in GB
+  size_gb: 50  # Disk size in GB
   family: production-cache  # Image family name
   disk_type: pd-ssd  # Options: pd-standard, pd-ssd, pd-balanced
   labels:
@@ -367,7 +367,7 @@ execution:
 project:
   name: ${GCP_PROJECT}  # Use environment variable
 
-cache:
+disk:
   name: ci-cache-${BUILD_ID}  # Dynamic naming with build ID
   size_gb: 30
   family: ci-cache
@@ -421,7 +421,7 @@ execution:
 project:
   name: ml-platform-project
 
-cache:
+disk:
   name: ml-models-cache
   size_gb: 200  # Large size for ML models and datasets
   family: ml-cache

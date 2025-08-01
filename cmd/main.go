@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	version   = "1.0.0"
+	version   = "2.0.0"
 	buildTime = "unknown"
 	gitCommit = "unknown"
 )
@@ -61,15 +61,15 @@ func main() {
 	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet")
 
 	// Cache configuration
-	flag.IntVar(&cfg.CacheSizeGB, "s", cfg.CacheSizeGB, "Cache disk size in GB")
-	flag.IntVar(&cfg.CacheSizeGB, "cache-size", cfg.CacheSizeGB, "Cache disk size in GB")
+	flag.IntVar(&cfg.DiskSizeGB, "s", cfg.DiskSizeGB, "Disk size in GB")         // 改为 DiskSizeGB
+	flag.IntVar(&cfg.DiskSizeGB, "disk-size", cfg.DiskSizeGB, "Disk size in GB") // 改为 DiskSizeGB
 	flag.DurationVar(&cfg.Timeout, "t", cfg.Timeout, "Build timeout")
 	flag.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Build timeout")
 
 	// Image management
-	flag.StringVar(&cfg.CacheFamilyName, "cache-family", cfg.CacheFamilyName, "Image family name")
-	var cacheLabels stringMap
-	flag.Var(&cacheLabels, "cache-labels", "Cache disk labels (key=value, repeatable)")
+	flag.StringVar(&cfg.DiskFamilyName, "disk-family", cfg.DiskFamilyName, "Image family name") // 改为 DiskFamilyName
+	var diskLabels stringMap                                                                    // 改为 diskLabels
+	flag.Var(&diskLabels, "disk-labels", "Disk labels (key=value, repeatable)")                 // 改为 disk-labels
 
 	// Authentication
 	flag.StringVar(&cfg.GCPOAuth, "gcp-oauth", "", "Path to GCP service account credential file")
@@ -157,12 +157,12 @@ func main() {
 	if len(containerImages) > 0 {
 		cfg.ContainerImages = []string(containerImages)
 	}
-	if len(cacheLabels) > 0 {
-		if cfg.CacheLabels == nil {
-			cfg.CacheLabels = make(map[string]string)
+	if len(diskLabels) > 0 { // 改为 diskLabels
+		if cfg.DiskLabels == nil { // 改为 DiskLabels
+			cfg.DiskLabels = make(map[string]string) // 改为 DiskLabels
 		}
-		for k, v := range cacheLabels {
-			cfg.CacheLabels[k] = v // Command line labels override config file labels
+		for k, v := range diskLabels { // 改为 diskLabels
+			cfg.DiskLabels[k] = v // Command line labels override config file labels  // 改为 DiskLabels
 		}
 	}
 

@@ -119,7 +119,7 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 	diskConfig := &disk.Config{
 		Name:   fmt.Sprintf("%s-disk", w.config.DiskImageName),
 		Zone:   w.config.Zone,
-		SizeGB: w.config.CacheSizeGB,
+		SizeGB: w.config.DiskSizeGB,
 		Type:   w.config.DiskType,
 	}
 
@@ -174,8 +174,8 @@ func (w *Workflow) createCacheImage(ctx context.Context, resources *WorkflowReso
 		Name:        w.config.DiskImageName,
 		SourceDisk:  resources.CacheDisk.Name,
 		Zone:        w.config.Zone,
-		Family:      w.config.CacheFamilyName,
-		Labels:      w.config.CacheLabels,
+		Family:      w.config.DiskFamilyName,
+		Labels:      w.config.DiskLabels,
 		Description: fmt.Sprintf("Image cache containing %d container images", len(w.config.ContainerImages)),
 	}
 

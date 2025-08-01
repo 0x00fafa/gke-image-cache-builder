@@ -72,8 +72,8 @@ func (c *Config) validateModeSpecificFields() error {
 }
 
 func (c *Config) validateOptionalFields() error {
-	if c.CacheSizeGB < 10 || c.CacheSizeGB > 1000 {
-		return fmt.Errorf("cache-size must be between 10 and 1000 GB (use --cache-size or 'cache.size_gb' in config file)")
+	if c.DiskSizeGB < 10 || c.DiskSizeGB > 1000 {
+		return fmt.Errorf("disk-size must be between 10 and 1000 GB (use --disk-size or 'disk.size_gb' in config file)")
 	}
 
 	if c.Timeout < time.Minute {
@@ -94,7 +94,7 @@ func (c *Config) validateOptionalFields() error {
 
 	// Validate disk type
 	if err := validateDiskType(c.DiskType); err != nil {
-		return fmt.Errorf("invalid disk type '%s': %w (use --disk-type or 'cache.disk_type' in config file)", c.DiskType, err)
+		return fmt.Errorf("invalid disk type '%s': %w (use --disk-type or 'disk.disk_type' in config file)", c.DiskType, err)
 	}
 
 	// Validate image pull auth
