@@ -3,6 +3,9 @@ package disk
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
 	"google.golang.org/api/compute/v1"
 
@@ -95,6 +98,67 @@ func (m *Manager) AttachDisk(ctx context.Context, diskName, instanceName, zone s
 	}
 
 	m.logger.Successf("Disk attached successfully: %s", diskName)
+	return nil
+}
+
+// GetAttachedDiskDevicePath gets the device path of an attached disk
+func (m *Manager) GetAttachedDiskDevicePath(ctx context.Context, diskName, instanceName, zone string) (string, error) {
+	m.logger.Debugf("Getting device path for disk: %s", diskName)
+
+	// Get instance information to find attached disks
+	instance, err := m.gcpClient.GetInstance(ctx, zone, instanceName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get instance info: %w", err)
+	}
+
+	// Find the disk in attached disks
+	for _, disk := range instance.Disks {
+		if strings.Contains(disk.Source, diskName) {
+			deviceName := disk.DeviceName
+			if deviceName == "" {
+				deviceName = "secondary-disk-image-disk" // Default device name
+			}
+
+			// Return the device path
+			devicePath := fmt.Sprintf("/dev/disk/by-id/google-%s", deviceName)
+			m.logger.Debugf("Found device path: %s", devicePath)
+			return devicePath, nil
+		}
+	}
+
+	return "", fmt.Errorf("disk %s not found in instance %s", diskName, instanceName)
+}
+
+// CheckLocalModePermissions checks if current user has necessary permissions for local mode
+func (m *Manager) CheckLocalModePermissions(ctx context.Context) error {
+	m.logger.Debug("Checking local mode permissions...")
+
+	// Check if running as root or with sudo
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("local mode requires root privileges. Please run with sudo")
+	}
+
+	// Check if we can create mount points
+	testDir := "/tmp/gke-cache-test"
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		return fmt.Errorf("cannot create directories: %w", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Check if mount command is available
+	if _, err := exec.LookPath("mount"); err != nil {
+		return fmt.Errorf("mount command not available: %w", err)
+	}
+
+	if _, err := exec.LookPath("umount"); err != nil {
+		return fmt.Errorf("umount command not available: %w", err)
+	}
+
+	if _, err := exec.LookPath("mkfs.ext4"); err != nil {
+		return fmt.Errorf("mkfs.ext4 command not available: %w", err)
+	}
+
+	m.logger.Debug("Local mode permissions validated")
 	return nil
 }
 

@@ -3,6 +3,9 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2/google"
@@ -139,11 +142,57 @@ func (c *Client) ListImages(ctx context.Context) ([]*compute.Image, error) {
 
 // GetCurrentInstanceMetadata gets metadata for the current instance (local mode)
 func (c *Client) GetCurrentInstanceMetadata(ctx context.Context) (*InstanceMetadata, error) {
-	// This would query the metadata server to get current instance info
-	// For now, return a placeholder
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Get instance name
+	nameReq, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/name", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create name request: %w", err)
+	}
+	nameReq.Header.Set("Metadata-Flavor", "Google")
+
+	nameResp, err := client.Do(nameReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance name: %w", err)
+	}
+	defer nameResp.Body.Close()
+
+	nameBody, err := ioutil.ReadAll(nameResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read instance name: %w", err)
+	}
+
+	// Get zone
+	zoneReq, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/zone", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zone request: %w", err)
+	}
+	zoneReq.Header.Set("Metadata-Flavor", "Google")
+
+	zoneResp, err := client.Do(zoneReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance zone: %w", err)
+	}
+	defer zoneResp.Body.Close()
+
+	zoneBody, err := ioutil.ReadAll(zoneResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read instance zone: %w", err)
+	}
+
+	// Zone format: projects/PROJECT_NUMBER/zones/ZONE_NAME
+	zonePath := string(zoneBody)
+	parts := strings.Split(zonePath, "/")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid zone format: %s", zonePath)
+	}
+	zone := parts[len(parts)-1]
+
 	return &InstanceMetadata{
-		Name: "current-instance",
-		Zone: "us-west1-b",
+		Name: string(nameBody),
+		Zone: zone,
 	}, nil
 }
 

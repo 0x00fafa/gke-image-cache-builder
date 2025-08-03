@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -68,7 +69,7 @@ func (c *Cache) PullAndCache(ctx context.Context, image string, cacheDisk *disk.
 func (c *Cache) ProcessImagesWithScript(ctx context.Context, config *ProcessConfig) error {
 	c.logger.Infof("Processing %d images with integrated script", len(config.Images))
 
-	// Execute the full workflow script
+	// Execute the full workflow script with complete parameters
 	args := []string{
 		"full-workflow",
 		config.DeviceName,
@@ -82,6 +83,38 @@ func (c *Cache) ProcessImagesWithScript(ctx context.Context, config *ProcessConf
 	}
 
 	c.logger.Success("Image processing completed successfully")
+	return nil
+}
+
+// ProcessImagesWithScriptAndDevice processes images with specific device path
+func (c *Cache) ProcessImagesWithScriptAndDevice(ctx context.Context, config *ProcessConfig, devicePath string) error {
+	c.logger.Infof("Processing %d images with device path: %s", len(config.Images), devicePath)
+
+	// Execute the full workflow script with device path
+	args := []string{
+		"full-workflow",
+		config.DeviceName,
+		config.AuthMechanism,
+		fmt.Sprintf("%t", config.StoreChecksums),
+	}
+	args = append(args, config.Images...)
+
+	// Set environment variable for device path
+	oldPath := os.Getenv("DEVICE_PATH")
+	os.Setenv("DEVICE_PATH", devicePath)
+	defer func() {
+		if oldPath != "" {
+			os.Setenv("DEVICE_PATH", oldPath)
+		} else {
+			os.Unsetenv("DEVICE_PATH")
+		}
+	}()
+
+	if err := scripts.ExecuteSetupScriptWithArgs(args...); err != nil {
+		return fmt.Errorf("failed to process images with device path: %w", err)
+	}
+
+	c.logger.Success("Image processing with device path completed successfully")
 	return nil
 }
 

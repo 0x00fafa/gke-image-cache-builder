@@ -1,10 +1,12 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -259,8 +261,21 @@ func checkContainerRuntime() error {
 
 // checkCommand checks if a command is available and working
 func checkCommand(command string, args ...string) error {
-	// This would be implemented with os/exec
-	// For now, return nil to indicate success
-	// In real implementation, this would execute the command and check the result
+	// Check if command exists
+	_, err := exec.LookPath(command)
+	if err != nil {
+		return fmt.Errorf("command %s not found: %w", command, err)
+	}
+
+	// Try to execute the command with args
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command, args...)
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("command %s %v failed: %w", command, args, err)
+	}
+
 	return nil
 }

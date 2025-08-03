@@ -9,6 +9,7 @@ import (
 	"github.com/0x00fafa/gke-image-cache-builder/internal/image"
 	"github.com/0x00fafa/gke-image-cache-builder/internal/vm"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
@@ -19,16 +20,18 @@ type Workflow struct {
 	vmManager   *vm.Manager
 	diskManager *disk.Manager
 	imageCache  *image.Cache
+	gcpClient   *gcp.Client
 }
 
 // NewWorkflow creates a new workflow instance
-func NewWorkflow(cfg *config.Config, logger *log.Logger, vmMgr *vm.Manager, diskMgr *disk.Manager, imgCache *image.Cache) *Workflow {
+func NewWorkflow(cfg *config.Config, logger *log.Logger, vmMgr *vm.Manager, diskMgr *disk.Manager, imgCache *image.Cache, gcpClient *gcp.Client) *Workflow {
 	return &Workflow{
 		config:      cfg,
 		logger:      logger,
 		vmManager:   vmMgr,
 		diskManager: diskMgr,
 		imageCache:  imgCache,
+		gcpClient:   gcpClient,
 	}
 }
 
@@ -83,6 +86,13 @@ func (w *Workflow) validatePrerequisites(ctx context.Context) error {
 	// Validate GCP permissions
 	if err := w.vmManager.ValidatePermissions(ctx, w.config.ProjectName, w.config.Zone); err != nil {
 		return fmt.Errorf("GCP permissions validation failed: %w", err)
+	}
+
+	// Additional checks for local mode
+	if w.config.IsLocalMode() {
+		if err := w.diskManager.CheckLocalModePermissions(ctx); err != nil {
+			return fmt.Errorf("local mode permissions check failed: %w", err)
+		}
 	}
 
 	// Validate container image accessibility
@@ -164,12 +174,17 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 		}
 	} else {
 		// Local mode: attach disk to current instance
-		// Get current instance name from metadata
-		// For now, use a placeholder - in real implementation, this would query metadata
-		currentInstance := "current-instance"
-		if err := w.diskManager.AttachDisk(ctx, cacheDisk.Name, currentInstance, w.config.Zone); err != nil {
+		// Get current instance metadata
+		instanceMetadata, err := w.gcpClient.GetCurrentInstanceMetadata(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current instance metadata: %w", err)
+		}
+
+		if err := w.diskManager.AttachDisk(ctx, cacheDisk.Name, instanceMetadata.Name, w.config.Zone); err != nil {
 			return nil, fmt.Errorf("failed to attach disk to current instance: %w", err)
 		}
+
+		w.logger.Infof("Attached disk to current instance: %s", instanceMetadata.Name)
 	}
 
 	w.logger.Info("Environment setup completed")
@@ -179,7 +194,23 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 func (w *Workflow) executeLocalMode(ctx context.Context, resources *WorkflowResources) error {
 	w.logger.Info("Executing local mode image processing...")
 
-	// Execute the integrated script workflow
+	// Get current instance metadata
+	instanceMetadata, err := w.gcpClient.GetCurrentInstanceMetadata(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get current instance metadata: %w", err)
+	}
+
+	w.logger.Infof("Running on instance: %s in zone: %s", instanceMetadata.Name, instanceMetadata.Zone)
+
+	// Get device path for the attached disk
+	devicePath, err := w.diskManager.GetAttachedDiskDevicePath(ctx, resources.CacheDisk.Name, instanceMetadata.Name, w.config.Zone)
+	if err != nil {
+		return fmt.Errorf("failed to get device path: %w", err)
+	}
+
+	w.logger.Infof("Using device path: %s", devicePath)
+
+	// Execute the integrated script workflow with device path
 	processConfig := &image.ProcessConfig{
 		DeviceName:     "secondary-disk-image-disk",
 		AuthMechanism:  w.config.ImagePullAuth,
@@ -187,13 +218,12 @@ func (w *Workflow) executeLocalMode(ctx context.Context, resources *WorkflowReso
 		Images:         w.config.ContainerImages,
 	}
 
-	if err := w.imageCache.ProcessImagesWithScript(ctx, processConfig); err != nil {
+	if err := w.imageCache.ProcessImagesWithScriptAndDevice(ctx, processConfig, devicePath); err != nil {
 		return fmt.Errorf("local image processing failed: %w", err)
 	}
 
 	// Detach disk from current instance
-	currentInstance := "current-instance"
-	if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, currentInstance, w.config.Zone); err != nil {
+	if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, instanceMetadata.Name, w.config.Zone); err != nil {
 		return fmt.Errorf("failed to detach disk: %w", err)
 	}
 
@@ -273,6 +303,15 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 				w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
 			}
 		}()
+	}
+
+	// For local mode, ensure disk is detached before deletion
+	if w.config.IsLocalMode() && resources.CacheDisk != nil {
+		instanceMetadata, err := w.gcpClient.GetCurrentInstanceMetadata(ctx)
+		if err == nil {
+			// Try to detach disk if still attached
+			w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, instanceMetadata.Name, w.config.Zone)
+		}
 	}
 
 	// Cleanup disk
