@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"os"
 	"strings"
 )
 
-// RegistryAuth handles container registry authentication
+// RegistryAuth handles container registry authentication with extended support
 type RegistryAuth struct {
 	authType string
 	gcpAuth  *GCPAuth
@@ -27,6 +29,10 @@ func (r *RegistryAuth) GetAuthConfig(ctx context.Context, registry string) (*Aut
 		return &AuthConfig{Type: "none"}, nil
 	case "ServiceAccountToken":
 		return r.getServiceAccountAuth(ctx, registry)
+	case "DockerConfig":
+		return r.getDockerConfigAuth(registry)
+	case "BasicAuth":
+		return r.getBasicAuth(registry)
 	default:
 		return nil, fmt.Errorf("unsupported auth type: %s", r.authType)
 	}
@@ -57,6 +63,51 @@ func (r *RegistryAuth) getServiceAccountAuth(ctx context.Context, registry strin
 	}, nil
 }
 
+func (r *RegistryAuth) getDockerConfigAuth(registry string) (*AuthConfig, error) {
+	// Read Docker config from standard locations
+	dockerConfigPath := os.Getenv("DOCKER_CONFIG")
+	if dockerConfigPath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		dockerConfigPath = homeDir + "/.docker"
+	}
+
+	configFile := dockerConfigPath + "/config.json"
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return &AuthConfig{Type: "none"}, nil
+	}
+
+	// Parse Docker config file (simplified implementation)
+	// In a real implementation, this would parse the JSON config file
+	return &AuthConfig{
+		Type:     "docker-config",
+		Registry: registry,
+	}, nil
+}
+
+func (r *RegistryAuth) getBasicAuth(registry string) (*AuthConfig, error) {
+	// Get credentials from environment variables
+	username := os.Getenv("REGISTRY_USERNAME")
+	password := os.Getenv("REGISTRY_PASSWORD")
+
+	if username == "" || password == "" {
+		return &AuthConfig{Type: "none"}, nil
+	}
+
+	// Create basic auth token
+	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+
+	return &AuthConfig{
+		Type:     "basic",
+		Token:    auth,
+		Username: username,
+		Password: password,
+		Registry: registry,
+	}, nil
+}
+
 func isGCPRegistry(registry string) bool {
 	gcpRegistries := []string{
 		"gcr.io",
@@ -64,14 +115,15 @@ func isGCPRegistry(registry string) bool {
 		"eu.gcr.io",
 		"asia.gcr.io",
 		"pkg.dev",
+		"us-docker.pkg.dev",
+		"eu-docker.pkg.dev",
+		"asia-docker.pkg.dev",
 	}
-
 	for _, gcpReg := range gcpRegistries {
 		if strings.Contains(registry, gcpReg) {
 			return true
 		}
 	}
-
 	return false
 }
 

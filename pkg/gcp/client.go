@@ -3,24 +3,39 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 )
 
-// Client wraps GCP API clients (compute only, no storage)
+// Client wraps GCP API clients with enhanced functionality
 type Client struct {
 	compute     *compute.Service
 	projectName string
+	credentials *google.Credentials
 }
 
-// NewClient creates a new GCP client
+// NewClient creates a new enhanced GCP client
 func NewClient(projectName, credentialsPath string) (*Client, error) {
 	ctx := context.Background()
-
 	var opts []option.ClientOption
+	var creds *google.Credentials
+	var err error
+
 	if credentialsPath != "" {
 		opts = append(opts, option.WithCredentialsFile(credentialsPath))
+		creds, err = google.CredentialsFromJSON(ctx, nil, compute.ComputeScope)
+	} else {
+		creds, err = google.FindDefaultCredentials(ctx, compute.ComputeScope)
+		if creds != nil {
+			opts = append(opts, option.WithCredentials(creds))
+		}
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get credentials: %w", err)
 	}
 
 	computeService, err := compute.NewService(ctx, opts...)
@@ -31,6 +46,7 @@ func NewClient(projectName, credentialsPath string) (*Client, error) {
 	return &Client{
 		compute:     computeService,
 		projectName: projectName,
+		credentials: creds,
 	}, nil
 }
 
@@ -42,4 +58,97 @@ func (c *Client) Compute() *compute.Service {
 // ProjectName returns the project name
 func (c *Client) ProjectName() string {
 	return c.projectName
+}
+
+// Credentials returns the credentials
+func (c *Client) Credentials() *google.Credentials {
+	return c.credentials
+}
+
+// WaitForOperation waits for a GCP operation to complete
+func (c *Client) WaitForOperation(ctx context.Context, operation *compute.Operation, zone string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		var op *compute.Operation
+		var err error
+
+		if zone != "" {
+			// Zone operation
+			op, err = c.compute.ZoneOperations.Get(c.projectName, zone, operation.Name).Context(ctx).Do()
+		} else {
+			// Global operation
+			op, err = c.compute.GlobalOperations.Get(c.projectName, operation.Name).Context(ctx).Do()
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to get operation status: %w", err)
+		}
+
+		if op.Status == "DONE" {
+			if op.Error != nil {
+				return fmt.Errorf("operation failed: %v", op.Error)
+			}
+			return nil
+		}
+
+		// Wait before checking again
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// GetInstance retrieves information about a VM instance
+func (c *Client) GetInstance(ctx context.Context, zone, instanceName string) (*compute.Instance, error) {
+	instance, err := c.compute.Instances.Get(c.projectName, zone, instanceName).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance %s: %w", instanceName, err)
+	}
+	return instance, nil
+}
+
+// GetDisk retrieves information about a disk
+func (c *Client) GetDisk(ctx context.Context, zone, diskName string) (*compute.Disk, error) {
+	disk, err := c.compute.Disks.Get(c.projectName, zone, diskName).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get disk %s: %w", diskName, err)
+	}
+	return disk, nil
+}
+
+// GetImage retrieves information about an image
+func (c *Client) GetImage(ctx context.Context, imageName string) (*compute.Image, error) {
+	image, err := c.compute.Images.Get(c.projectName, imageName).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image %s: %w", imageName, err)
+	}
+	return image, nil
+}
+
+// ListImages lists images in the project
+func (c *Client) ListImages(ctx context.Context) ([]*compute.Image, error) {
+	imageList, err := c.compute.Images.List(c.projectName).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list images: %w", err)
+	}
+	return imageList.Items, nil
+}
+
+// GetCurrentInstanceMetadata gets metadata for the current instance (local mode)
+func (c *Client) GetCurrentInstanceMetadata(ctx context.Context) (*InstanceMetadata, error) {
+	// This would query the metadata server to get current instance info
+	// For now, return a placeholder
+	return &InstanceMetadata{
+		Name: "current-instance",
+		Zone: "us-west1-b",
+	}, nil
+}
+
+// InstanceMetadata holds instance metadata
+type InstanceMetadata struct {
+	Name string
+	Zone string
 }

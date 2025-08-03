@@ -20,7 +20,6 @@ func NewErrorHandler() *ErrorHandler {
 // HandleConfigError provides helpful error messages with solutions
 func (e *ErrorHandler) HandleConfigError(err error) {
 	errorMsg := err.Error()
-
 	switch {
 	case strings.Contains(errorMsg, "configuration file not found"):
 		e.showConfigFileNotFoundError(err)
@@ -32,7 +31,7 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 		e.showExecutionModeError()
 	case strings.Contains(errorMsg, "zone") && strings.Contains(errorMsg, "required"):
 		e.showZoneRequiredError()
-	case strings.Contains(errorMsg, "GCP VM") || strings.Contains(errorMsg, "local mode"):
+	case strings.Contains(errorMsg, "container environments") || strings.Contains(errorMsg, "local mode"):
 		e.showLocalModeEnvironmentError()
 	case strings.Contains(errorMsg, "project-name"):
 		e.showProjectNameError()
@@ -44,14 +43,41 @@ func (e *ErrorHandler) HandleConfigError(err error) {
 		e.showMachineTypeError(err)
 	case strings.Contains(errorMsg, "invalid disk type"):
 		e.showDiskTypeError(err)
+	case strings.Contains(errorMsg, "container runtime"):
+		e.showContainerRuntimeError(err)
 	default:
 		e.showGenericError(err)
 	}
 }
 
+func (e *ErrorHandler) showContainerRuntimeError(err error) {
+	fmt.Printf(`Error: Container runtime check failed
+%v
+
+SOLUTIONS:
+    1. Install containerd:
+       sudo apt update && sudo apt install containerd
+       sudo systemctl start containerd
+       
+    2. Install Docker:
+       curl -fsSL https://get.docker.com -o get-docker.sh
+       sudo sh get-docker.sh
+       
+    3. Use remote mode instead:
+       %s -R --zone=us-west1-b --project-name=<PROJECT> --disk-image-name=<NAME> --container-image=<IMAGE>
+
+VERIFICATION:
+    # Check containerd
+    sudo ctr version
+    
+    # Check Docker
+    docker version
+
+For remote mode help: %s --help-examples`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+}
+
 func (e *ErrorHandler) showConfigFileNotFoundError(err error) {
 	fmt.Printf(`Error: Configuration file not found
-
 %v
 
 SOLUTIONS:
@@ -66,14 +92,12 @@ EXAMPLES:
     %s --generate-config basic --output web-app.yaml
     %s --config web-app.yaml
 
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
+For configuration help: %s --help-config`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
 		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showYAMLParseError(err error) {
 	fmt.Printf(`Error: YAML configuration file parsing failed
-
 %v
 
 SOLUTIONS:
@@ -98,13 +122,11 @@ EXAMPLE VALID YAML:
       - nginx:latest
       - redis:alpine
 
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+For configuration help: %s --help-config`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showConfigValidationError(err error) {
 	fmt.Printf(`Error: Configuration validation failed
-
 %v
 
 SOLUTIONS:
@@ -119,11 +141,10 @@ SOLUTIONS:
 REQUIRED CONFIGURATION:
     execution.mode: local or remote
     project.name: your-gcp-project
-    cache.name: your-cache-name
+    disk.name: your-disk-image-name
     images: [list of container images]
 
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
+For configuration help: %s --help-config`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName,
 		e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
@@ -137,6 +158,7 @@ SOLUTION:
     • Cost-effective (no additional VM charges)
     • Faster execution (no VM startup time)
     • Requires current machine to be a GCP VM
+    • Requires containerd or Docker installed
     
     REMOTE MODE (-R): Create temporary GCP VM  
     • Works from any machine
@@ -150,8 +172,7 @@ EXAMPLES:
     # Remote mode (from anywhere)
     %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
 
-Run '%s --help' for more information.
-`, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+Run '%s --help' for more information.`, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showZoneRequiredError() {
@@ -162,17 +183,19 @@ SOLUTION:
     
     Available zones: us-west1-b, us-central1-a, europe-west1-b, asia-east1-a
     
-EXAMPLE:
+    EXAMPLE:
     %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=my-cache --container-image=nginx:latest
 
-TIP: Use 'gcloud compute zones list' to see all available zones
-`, e.toolInfo.ExecutableName)
+TIP: Use 'gcloud compute zones list' to see all available zones`, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showLocalModeEnvironmentError() {
-	fmt.Printf(`Error: Local mode (-L) requires execution on a GCP VM instance
+	fmt.Printf(`Error: Local mode (-L) environment check failed
 
-CURRENT ENVIRONMENT: Not a GCP VM
+POSSIBLE CAUSES:
+    • Running in a container environment (Docker, Kubernetes)
+    • Not running on a GCP VM instance
+    • Network connectivity issues to GCP metadata server
 
 SOLUTIONS:
     1. Use remote mode instead:
@@ -183,8 +206,9 @@ SOLUTIONS:
     3. Use Google Cloud Shell:
        https://shell.cloud.google.com
 
-DETECTION: This tool detected it's not running on a GCP VM instance.
-`, e.toolInfo.ExecutableName)
+ENVIRONMENT DETECTION:
+    This tool detected it's not running in a suitable environment for local mode.
+    Local mode requires execution on a GCP VM instance with access to the metadata server.`, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showProjectNameError() {
@@ -193,60 +217,11 @@ func (e *ErrorHandler) showProjectNameError() {
 SOLUTION:
     Specify your GCP project with --project-name parameter
     
-EXAMPLES:
+    EXAMPLES:
     %s -L --project-name=my-gcp-project --disk-image-name=web-cache --container-image=nginx:latest
     %s -R --zone=us-west1-b --project-name=production-project --disk-image-name=app-cache --container-image=node:16
 
-TIP: Use 'gcloud config get-value project' to see your current project
-`, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showCacheNameError() {
-	fmt.Printf(`Error: Cache name required
-
-SOLUTION:
-    Specify a name for your image cache disk with --cache-name parameter
-    
-    Cache name should be:
-    • Descriptive of the cached images
-    • Unique within your project
-    • Follow GCP naming conventions (lowercase, hyphens)
-    
-EXAMPLES:
-    --cache-name=web-app-cache          # For web application images
-    --cache-name=ml-models-cache        # For ML model images  
-    --cache-name=microservices-cache    # For microservices stack
-
-FULL EXAMPLE:
-    %s -L --project-name=my-project --cache-name=web-stack \
-        --container-image=nginx:1.21 \
-        --container-image=redis:6.2-alpine \
-        --container-image=postgres:13
-`, e.toolInfo.ExecutableName)
-}
-
-func (e *ErrorHandler) showContainerImageError() {
-	fmt.Printf(`Error: At least one container image required
-
-SOLUTION:
-    Specify container images to cache with --container-image parameter
-    You can specify multiple images by repeating the parameter
-    
-SUPPORTED REGISTRIES:
-    • Docker Hub: nginx:latest, node:16-alpine
-    • Google Container Registry: gcr.io/my-project/app:v1.0
-    • Artifact Registry: us-docker.pkg.dev/my-project/repo/app:latest
-    
-EXAMPLES:
-    # Single image
-    --container-image=nginx:latest
-    
-    # Multiple images
-    --container-image=nginx:latest --container-image=redis:alpine --container-image=postgres:13
-    
-FULL EXAMPLE:
-    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
-`, e.toolInfo.ExecutableName)
+TIP: Use 'gcloud config get-value project' to see your current project`, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showDiskImageNameError() {
@@ -260,20 +235,51 @@ SOLUTION:
     • Unique within your project
     • Follow GCP naming conventions (lowercase, hyphens)
     
-EXAMPLES:
+    EXAMPLES:
     --disk-image-name=web-app-cache          # For web application images
     --disk-image-name=ml-models-cache        # For ML model images  
     --disk-image-name=microservices-cache    # For microservices stack
     --disk-image-name=team-a-cache-v1.2.0    # With version/team info
 
 FULL EXAMPLE:
-    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest
-`, e.toolInfo.ExecutableName)
+    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest`, e.toolInfo.ExecutableName)
+}
+
+func (e *ErrorHandler) showContainerImageError() {
+	fmt.Printf(`Error: At least one container image required
+
+SOLUTION:
+    Specify container images to cache with --container-image parameter
+    You can specify multiple images by repeating the parameter
+    
+    SUPPORTED REGISTRIES:
+    • Docker Hub: nginx:latest, node:16-alpine
+    • Google Container Registry: gcr.io/my-project/app:v1.0
+    • Artifact Registry: us-docker.pkg.dev/my-project/repo/app:latest
+    • Private registries with authentication
+    
+    AUTHENTICATION OPTIONS:
+    • None: Public images (default)
+    • ServiceAccountToken: GCP registries with service account
+    • DockerConfig: Use Docker configuration file
+    • BasicAuth: Username/password via environment variables
+    
+    EXAMPLES:
+    # Single image
+    --container-image=nginx:latest
+    
+    # Multiple images
+    --container-image=nginx:latest --container-image=redis:alpine --container-image=postgres:13
+    
+    # With authentication
+    --image-pull-auth=ServiceAccountToken --container-image=gcr.io/my-project/app:latest
+    
+    FULL EXAMPLE:
+    %s -L --project-name=my-project --disk-image-name=web-app-cache --container-image=nginx:latest`, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showMachineTypeError(err error) {
 	fmt.Printf(`Error: Invalid machine type
-
 %v
 
 SOLUTIONS:
@@ -294,13 +300,11 @@ EXAMPLES:
     advanced:
       machine_type: e2-standard-4
 
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName)
+For configuration help: %s --help-config`, err, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showDiskTypeError(err error) {
 	fmt.Printf(`Error: Invalid disk type
-
 %v
 
 SOLUTIONS:
@@ -316,11 +320,10 @@ EXAMPLES:
     --disk-type=pd-ssd
     
     # Configuration file
-    cache:
+    disk:
       disk_type: pd-ssd
 
-For configuration help: %s --help-config
-`, err, e.toolInfo.ExecutableName)
+For configuration help: %s --help-config`, err, e.toolInfo.ExecutableName)
 }
 
 func (e *ErrorHandler) showGenericError(err error) {
@@ -339,15 +342,13 @@ QUICK HELP:
     Additional for remote mode:
     • --zone: GCP zone (e.g., us-west1-b)
     
-For detailed help: %s --help
-For examples: %s --help-examples
-`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
+    For detailed help: %s --help
+For examples: %s --help-examples`, err, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName, e.toolInfo.ExecutableName)
 }
 
 // ShowNoArgsHelp displays help when no arguments are provided
 func ShowNoArgsHelp() {
 	toolInfo := GetToolInfo()
-
 	fmt.Printf(`%s v2.0
 %s
 
@@ -365,9 +366,14 @@ EXAMPLES:
     %s -L --project-name=my-project --disk-image-name=web-cache --container-image=nginx:latest
     %s -R --zone=us-west1-b --project-name=my-project --disk-image-name=app-cache --container-image=node:16
 
+AUTHENTICATION OPTIONS:
+    --image-pull-auth=None                    # Public images (default)
+    --image-pull-auth=ServiceAccountToken     # GCP registries
+    --image-pull-auth=DockerConfig           # Docker config file
+    --image-pull-auth=BasicAuth              # Environment variables
+
 For detailed help: %s --help
-For examples: %s --help-examples
-`, toolInfo.DisplayName, toolInfo.Purpose,
+For examples: %s --help-examples`, toolInfo.DisplayName, toolInfo.Purpose,
 		toolInfo.ExecutableName, toolInfo.ExecutableName,
 		toolInfo.ExecutableName, toolInfo.ExecutableName,
 		toolInfo.ExecutableName, toolInfo.ExecutableName)

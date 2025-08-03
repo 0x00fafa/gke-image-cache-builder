@@ -39,23 +39,29 @@ func (w *Workflow) Execute(ctx context.Context) error {
 		return fmt.Errorf("prerequisite validation failed: %w", err)
 	}
 
-	// Step 2: Setup execution environment
+	// Step 2: Check existing images (local mode only)
+	if w.config.IsLocalMode() {
+		if err := w.handleExistingImages(ctx); err != nil {
+			return fmt.Errorf("existing images handling failed: %w", err)
+		}
+	}
+
+	// Step 3: Setup execution environment
 	resources, err := w.setupEnvironment(ctx)
 	if err != nil {
 		return fmt.Errorf("environment setup failed: %w", err)
 	}
 	defer w.cleanupResources(ctx, resources)
 
-	// Step 3: Setup VM if in remote mode
-	if w.config.IsRemoteMode() && resources.VMInstance != nil {
-		if err := w.vmManager.SetupVM(ctx, resources.VMInstance); err != nil {
-			return fmt.Errorf("VM setup failed: %w", err)
+	// Step 4: Execute image processing based on mode
+	if w.config.IsLocalMode() {
+		if err := w.executeLocalMode(ctx, resources); err != nil {
+			return fmt.Errorf("local mode execution failed: %w", err)
 		}
-	}
-
-	// Step 4: Process container images
-	if err := w.processContainerImages(ctx, resources); err != nil {
-		return fmt.Errorf("image processing failed: %w", err)
+	} else {
+		if err := w.executeRemoteMode(ctx, resources); err != nil {
+			return fmt.Errorf("remote mode execution failed: %w", err)
+		}
 	}
 
 	// Step 5: Create cache disk image
@@ -90,10 +96,48 @@ func (w *Workflow) validatePrerequisites(ctx context.Context) error {
 	return nil
 }
 
+func (w *Workflow) handleExistingImages(ctx context.Context) error {
+	w.logger.Info("Checking for existing images...")
+
+	existingInfo, err := w.imageCache.CheckExistingImages(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check existing images: %w", err)
+	}
+
+	if len(existingInfo.Images) > 0 {
+		switch existingInfo.Action {
+		case image.ActionClean:
+			if err := w.imageCache.CleanExistingImages(ctx, existingInfo.Images); err != nil {
+				return fmt.Errorf("failed to clean existing images: %w", err)
+			}
+		case image.ActionCancel:
+			return fmt.Errorf("operation cancelled by user")
+		case image.ActionMerge:
+			w.logger.Info("Continuing with existing images (merge mode)")
+		}
+	}
+
+	return nil
+}
+
 func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, error) {
 	w.logger.Info("Setting up execution environment...")
-
 	resources := &WorkflowResources{}
+
+	// Create cache disk
+	diskConfig := &disk.Config{
+		Name:   fmt.Sprintf("%s-disk", w.config.DiskImageName),
+		Zone:   w.config.Zone,
+		SizeGB: w.config.DiskSizeGB,
+		Type:   w.config.DiskType,
+	}
+
+	cacheDisk, err := w.diskManager.CreateDisk(ctx, diskConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cache disk: %w", err)
+	}
+	resources.CacheDisk = cacheDisk
+	w.logger.Infof("Created cache disk: %s", cacheDisk.Name)
 
 	if w.config.IsRemoteMode() {
 		// Create temporary VM
@@ -113,57 +157,72 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 		}
 		resources.VMInstance = vmInstance
 		w.logger.Infof("Created temporary VM: %s", vmInstance.Name)
-	}
 
-	// Create cache disk
-	diskConfig := &disk.Config{
-		Name:   fmt.Sprintf("%s-disk", w.config.DiskImageName),
-		Zone:   w.config.Zone,
-		SizeGB: w.config.DiskSizeGB,
-		Type:   w.config.DiskType,
+		// Attach disk to remote VM
+		if err := w.diskManager.AttachDisk(ctx, cacheDisk.Name, vmInstance.Name, w.config.Zone); err != nil {
+			return nil, fmt.Errorf("failed to attach disk to VM: %w", err)
+		}
+	} else {
+		// Local mode: attach disk to current instance
+		// Get current instance name from metadata
+		// For now, use a placeholder - in real implementation, this would query metadata
+		currentInstance := "current-instance"
+		if err := w.diskManager.AttachDisk(ctx, cacheDisk.Name, currentInstance, w.config.Zone); err != nil {
+			return nil, fmt.Errorf("failed to attach disk to current instance: %w", err)
+		}
 	}
-
-	cacheDisk, err := w.diskManager.CreateDisk(ctx, diskConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cache disk: %w", err)
-	}
-	resources.CacheDisk = cacheDisk
-	w.logger.Infof("Created cache disk: %s", cacheDisk.Name)
 
 	w.logger.Info("Environment setup completed")
 	return resources, nil
 }
 
-func (w *Workflow) processContainerImages(ctx context.Context, resources *WorkflowResources) error {
-	w.logger.Infof("Processing %d container images...", len(w.config.ContainerImages))
+func (w *Workflow) executeLocalMode(ctx context.Context, resources *WorkflowResources) error {
+	w.logger.Info("Executing local mode image processing...")
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(w.config.ContainerImages))
-
-	// Process images in parallel for better performance
-	for i, img := range w.config.ContainerImages {
-		wg.Add(1)
-		go func(index int, image string) {
-			defer wg.Done()
-			w.logger.Progressf(index+1, len(w.config.ContainerImages), "Processing %s", image)
-
-			if err := w.imageCache.PullAndCache(ctx, image, resources.CacheDisk); err != nil {
-				errChan <- fmt.Errorf("failed to process image %s: %w", image, err)
-			}
-		}(i, img)
+	// Execute the integrated script workflow
+	processConfig := &image.ProcessConfig{
+		DeviceName:     "secondary-disk-image-disk",
+		AuthMechanism:  w.config.ImagePullAuth,
+		StoreChecksums: true, // Always store checksums for verification
+		Images:         w.config.ContainerImages,
 	}
 
-	wg.Wait()
-	close(errChan)
-
-	// Check for any errors
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
+	if err := w.imageCache.ProcessImagesWithScript(ctx, processConfig); err != nil {
+		return fmt.Errorf("local image processing failed: %w", err)
 	}
 
-	w.logger.Info("All container images processed successfully")
+	// Detach disk from current instance
+	currentInstance := "current-instance"
+	if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, currentInstance, w.config.Zone); err != nil {
+		return fmt.Errorf("failed to detach disk: %w", err)
+	}
+
+	w.logger.Success("Local mode execution completed")
+	return nil
+}
+
+func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowResources) error {
+	w.logger.Info("Executing remote mode image processing...")
+
+	// Execute remote build on the temporary VM
+	remoteBuildConfig := &vm.RemoteBuildConfig{
+		DeviceName:      "secondary-disk-image-disk",
+		AuthMechanism:   w.config.ImagePullAuth,
+		StoreChecksums:  true,
+		ContainerImages: w.config.ContainerImages,
+		Timeout:         w.config.Timeout,
+	}
+
+	if err := w.vmManager.ExecuteRemoteImageBuild(ctx, resources.VMInstance, remoteBuildConfig); err != nil {
+		return fmt.Errorf("remote image build failed: %w", err)
+	}
+
+	// Detach disk from remote VM
+	if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, resources.VMInstance.Name, w.config.Zone); err != nil {
+		return fmt.Errorf("failed to detach disk from VM: %w", err)
+	}
+
+	w.logger.Success("Remote mode execution completed")
 	return nil
 }
 
@@ -201,22 +260,35 @@ func (w *Workflow) verifyCacheImage(ctx context.Context) error {
 func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowResources) {
 	w.logger.Info("Cleaning up temporary resources...")
 
+	var wg sync.WaitGroup
+
+	// Cleanup VM
 	if resources.VMInstance != nil {
-		if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
-			w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
-		} else {
-			w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
+				w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
+			} else {
+				w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
+			}
+		}()
 	}
 
+	// Cleanup disk
 	if resources.CacheDisk != nil {
-		if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
-			w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
-		} else {
-			w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
+				w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
+			} else {
+				w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
+			}
+		}()
 	}
 
+	wg.Wait()
 	w.logger.Info("Resource cleanup completed")
 }
 
