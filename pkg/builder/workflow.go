@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
 	"github.com/0x00fafa/gke-image-cache-builder/internal/image"
@@ -54,28 +53,38 @@ func (w *Workflow) Execute(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("environment setup failed: %w", err)
 	}
-	defer w.cleanupResources(ctx, resources)
 
 	// Step 4: Execute image processing based on mode
 	if w.config.IsLocalMode() {
 		if err := w.executeLocalMode(ctx, resources); err != nil {
+			// Cleanup resources on failure
+			w.cleanupResources(ctx, resources)
 			return fmt.Errorf("local mode execution failed: %w", err)
 		}
 	} else {
 		if err := w.executeRemoteMode(ctx, resources); err != nil {
+			// Cleanup resources on failure
+			w.cleanupResources(ctx, resources)
 			return fmt.Errorf("remote mode execution failed: %w", err)
 		}
 	}
 
 	// Step 5: Create cache disk image
 	if err := w.createCacheImage(ctx, resources); err != nil {
+		// Cleanup resources on failure
+		w.cleanupResources(ctx, resources)
 		return fmt.Errorf("cache image creation failed: %w", err)
 	}
 
 	// Step 6: Verify cache image
 	if err := w.verifyCacheImage(ctx); err != nil {
+		// Cleanup resources on failure
+		w.cleanupResources(ctx, resources)
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
+
+	// Step 7: Cleanup resources on success
+	w.cleanupResources(ctx, resources)
 
 	return nil
 }
@@ -290,19 +299,13 @@ func (w *Workflow) verifyCacheImage(ctx context.Context) error {
 func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowResources) {
 	w.logger.Info("Cleaning up temporary resources...")
 
-	var wg sync.WaitGroup
-
-	// Cleanup VM
+	// Cleanup VM first (and wait for completion)
 	if resources.VMInstance != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
-				w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
-			} else {
-				w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
-			}
-		}()
+		if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
+			w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
+		} else {
+			w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
+		}
 	}
 
 	// For local mode, ensure disk is detached before deletion
@@ -314,20 +317,15 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 		}
 	}
 
-	// Cleanup disk
+	// Cleanup disk after VM is deleted
 	if resources.CacheDisk != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
-				w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
-			} else {
-				w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
-			}
-		}()
+		if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
+			w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
+		} else {
+			w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
+		}
 	}
 
-	wg.Wait()
 	w.logger.Info("Resource cleanup completed")
 }
 
