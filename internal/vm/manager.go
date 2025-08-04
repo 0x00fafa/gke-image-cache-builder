@@ -44,9 +44,16 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 
 	// Add SSH key if provided
 	if config.SSHPublicKey != "" {
+		// Format SSH key properly for GCP
+		// GCP expects: "username:ssh-rsa AAAAB3NzaC1yc2E... user@host"
+		sshKey := config.SSHPublicKey
+		if !strings.Contains(sshKey, ":") {
+			// Use "abc" as the username as requested
+			sshKey = "abc:" + sshKey
+		}
 		metadataItems = append(metadataItems, &compute.MetadataItems{
 			Key:   "ssh-keys",
-			Value: &config.SSHPublicKey,
+			Value: &sshKey,
 		})
 	}
 
@@ -117,11 +124,12 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 	if err != nil {
 		m.logger.Warnf("Failed to get VM instance details: %v", err)
 	} else {
-		// Print the public IP address
+		// Print the public IP address and SSH connection info
 		if len(vmInstance.NetworkInterfaces) > 0 && len(vmInstance.NetworkInterfaces[0].AccessConfigs) > 0 {
 			publicIP := vmInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
 			if publicIP != "" {
 				m.logger.Infof("VM public IP address: %s", publicIP)
+				m.logger.Infof("SSH connection command: ssh abc@%s", publicIP)
 			}
 		}
 	}
@@ -225,6 +233,9 @@ chmod +x /tmp/setup-and-verify.sh
 
 # Execute full workflow with parameters
 /tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + config.ImagePullAuth + ` true ` + images + `
+
+# Signal completion
+echo "Unpacking is completed."
 
 echo "Setup completed successfully"
 `

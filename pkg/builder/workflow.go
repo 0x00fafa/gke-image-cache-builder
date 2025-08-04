@@ -69,28 +69,23 @@ func (w *Workflow) Execute(ctx context.Context) error {
 		}
 	}
 
-	// Temporarily comment out cache disk image creation and verification for debugging
-	/*
-		// Step 5: Create cache disk image
-		if err := w.createCacheImage(ctx, resources); err != nil {
-			// Cleanup resources on failure
-			w.cleanupResources(ctx, resources)
-			return fmt.Errorf("cache image creation failed: %w", err)
-		}
-
-		// Step 6: Verify cache image
-		if err := w.verifyCacheImage(ctx); err != nil {
-			// Cleanup resources on failure
-			w.cleanupResources(ctx, resources)
-			return fmt.Errorf("cache image verification failed: %w", err)
-		}
-	*/
-
-	// Temporarily comment out final cleanup for debugging
-	/*
-		// Step 7: Cleanup resources on success
+	// Step 5: Create cache disk image
+	if err := w.createCacheImage(ctx, resources); err != nil {
+		// Cleanup resources on failure
 		w.cleanupResources(ctx, resources)
-	*/
+		return fmt.Errorf("cache image creation failed: %w", err)
+	}
+
+	// Step 6: Verify cache image
+	if err := w.verifyCacheImage(ctx); err != nil {
+		// Cleanup resources on failure
+		w.cleanupResources(ctx, resources)
+		return fmt.Errorf("cache image verification failed: %w", err)
+	}
+
+	// Step 7: Cleanup resources on success
+	// Temporarily comment out cleanup for debugging purposes
+	// w.cleanupResources(ctx, resources)
 
 	return nil
 }
@@ -252,14 +247,6 @@ func (w *Workflow) executeLocalMode(ctx context.Context, resources *WorkflowReso
 func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowResources) error {
 	w.logger.Info("Executing remote mode image processing...")
 
-	// Get device path for the attached disk
-	devicePath, err := w.diskManager.GetAttachedDiskDevicePath(ctx, resources.CacheDisk.Name, resources.VMInstance.Name, w.config.Zone)
-	if err != nil {
-		return fmt.Errorf("failed to get device path: %w", err)
-	}
-
-	w.logger.Infof("Using device path: %s", devicePath)
-
 	// Execute remote build on the temporary VM
 	remoteBuildConfig := &vm.RemoteBuildConfig{
 		DeviceName:      "secondary-disk-image-disk",
@@ -273,13 +260,10 @@ func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowRes
 		return fmt.Errorf("remote image build failed: %w", err)
 	}
 
-	// Temporarily comment out disk detachment and subsequent steps for debugging
-	/*
-		// Detach disk from remote VM
-		if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, resources.VMInstance.Name, w.config.Zone); err != nil {
-			return fmt.Errorf("failed to detach disk from VM: %w", err)
-		}
-	*/
+	// Detach disk from remote VM
+	if err := w.diskManager.DetachDisk(ctx, resources.CacheDisk.Name, resources.VMInstance.Name, w.config.Zone); err != nil {
+		return fmt.Errorf("failed to detach disk from VM: %w", err)
+	}
 
 	w.logger.Success("Remote mode execution completed")
 	return nil
@@ -319,17 +303,14 @@ func (w *Workflow) verifyCacheImage(ctx context.Context) error {
 func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowResources) {
 	w.logger.Info("Cleaning up temporary resources...")
 
-	// Temporarily comment out VM cleanup for debugging
-	/*
-		// Cleanup VM first (and wait for completion)
-		if resources.VMInstance != nil {
-			if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
-				w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
-			} else {
-				w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
-			}
+	// Cleanup VM first (and wait for completion)
+	if resources.VMInstance != nil {
+		if err := w.vmManager.DeleteVM(ctx, resources.VMInstance.Name, w.config.Zone); err != nil {
+			w.logger.Warnf("Failed to cleanup VM %s: %v", resources.VMInstance.Name, err)
+		} else {
+			w.logger.Infof("Cleaned up VM: %s", resources.VMInstance.Name)
 		}
-	*/
+	}
 
 	// For local mode, ensure disk is detached before deletion
 	if w.config.IsLocalMode() && resources.CacheDisk != nil {
@@ -340,17 +321,14 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 		}
 	}
 
-	// Temporarily comment out disk cleanup for debugging
-	/*
-		// Cleanup disk after VM is deleted
-		if resources.CacheDisk != nil {
-			if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
-				w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
-			} else {
-				w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
-			}
+	// Cleanup disk after VM is deleted
+	if resources.CacheDisk != nil {
+		if err := w.diskManager.DeleteDisk(ctx, resources.CacheDisk.Name, w.config.Zone); err != nil {
+			w.logger.Warnf("Failed to cleanup disk %s: %v", resources.CacheDisk.Name, err)
+		} else {
+			w.logger.Infof("Cleaned up disk: %s", resources.CacheDisk.Name)
 		}
-	*/
+	}
 
 	w.logger.Info("Resource cleanup completed")
 }

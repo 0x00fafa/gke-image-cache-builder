@@ -100,17 +100,6 @@ func (c *Cache) ProcessImagesWithScriptAndDevice(ctx context.Context, config *Pr
 	}
 	args = append(args, config.Images...)
 
-	// Set environment variable for device path
-	oldPath := os.Getenv("DEVICE_PATH")
-	os.Setenv("DEVICE_PATH", devicePath)
-	defer func() {
-		if oldPath != "" {
-			os.Setenv("DEVICE_PATH", oldPath)
-		} else {
-			os.Unsetenv("DEVICE_PATH")
-		}
-	}()
-
 	if err := scripts.ExecuteSetupScriptWithArgs(args...); err != nil {
 		return fmt.Errorf("failed to process images with device path: %w", err)
 	}
