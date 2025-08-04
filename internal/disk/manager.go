@@ -133,15 +133,14 @@ func (m *Manager) GetAttachedDiskDevicePath(ctx context.Context, diskName, insta
 func (m *Manager) CheckLocalModePermissions(ctx context.Context) error {
 	m.logger.Debug("Checking local mode permissions...")
 
-	// Check if running as root or with sudo
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("local mode requires root privileges. Please run with sudo")
-	}
-
-	// Check if we can create mount points
+	// Check if we can create mount points (less strict check)
 	testDir := "/tmp/gke-cache-test"
 	if err := os.MkdirAll(testDir, 0755); err != nil {
-		return fmt.Errorf("cannot create directories: %w", err)
+		// If we can't create in /tmp, try current directory
+		testDir = "./gke-cache-test"
+		if err := os.MkdirAll(testDir, 0755); err != nil {
+			return fmt.Errorf("cannot create directories: %w", err)
+		}
 	}
 	defer os.RemoveAll(testDir)
 

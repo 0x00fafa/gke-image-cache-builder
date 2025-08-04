@@ -201,6 +201,16 @@ func isRunningOnGCP() bool {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// Try alternative approach - check for GCP-specific files
+		if _, err := os.Stat("/sys/class/dmi/id/product_name"); err == nil {
+			// Read the file to check if it contains GCP identifiers
+			if data, readErr := ioutil.ReadFile("/sys/class/dmi/id/product_name"); readErr == nil {
+				content := strings.ToLower(string(data))
+				if strings.Contains(content, "google") || strings.Contains(content, "gcp") {
+					return true
+				}
+			}
+		}
 		return false
 	}
 	defer resp.Body.Close()
