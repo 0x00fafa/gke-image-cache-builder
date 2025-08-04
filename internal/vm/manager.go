@@ -43,7 +43,7 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 				Boot:       true,
 				AutoDelete: true,
 				InitializeParams: &compute.AttachedDiskInitializeParams{
-					SourceImage: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts",
+					SourceImage: "projects/ubuntu-os-cloud/global/images/ubuntu-minimal-2204-jammy-v20250723",
 					DiskSizeGb:  20,
 					DiskType:    fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-standard", m.gcpClient.ProjectName(), config.Zone),
 				},
