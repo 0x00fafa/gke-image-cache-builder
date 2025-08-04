@@ -176,6 +176,12 @@ func (m *Manager) ValidatePermissions(ctx context.Context, projectName, zone str
 
 // generateStartupScript generates the startup script for remote VM
 func (m *Manager) generateStartupScript(config *Config) string {
+	// Generate image list as a space-separated string
+	images := "nginx:latest" // Default fallback
+	if len(config.ContainerImages) > 0 {
+		images = strings.Join(config.ContainerImages, " ")
+	}
+
 	script := `#!/bin/bash
 set -e
 
@@ -192,8 +198,8 @@ SCRIPT_EOF
 
 chmod +x /tmp/setup-and-verify.sh
 
-# Execute setup
-/tmp/setup-and-verify.sh setup
+# Execute full workflow with parameters
+/tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + config.ImagePullAuth + ` true ` + images + `
 
 echo "Setup completed successfully"
 `
@@ -278,13 +284,15 @@ func (m *Manager) getRegionFromZone(zone string) string {
 
 // Config holds VM configuration
 type Config struct {
-	Name           string
-	Zone           string
-	MachineType    string
-	Network        string
-	Subnet         string
-	ServiceAccount string
-	Preemptible    bool
+	Name            string
+	Zone            string
+	MachineType     string
+	Network         string
+	Subnet          string
+	ServiceAccount  string
+	Preemptible     bool
+	ContainerImages []string
+	ImagePullAuth   string
 }
 
 // RemoteBuildConfig holds remote build configuration

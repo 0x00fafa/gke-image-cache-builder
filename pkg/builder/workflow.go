@@ -167,13 +167,15 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 	if w.config.IsRemoteMode() {
 		// Create temporary VM
 		vmConfig := &vm.Config{
-			Name:           fmt.Sprintf("cache-builder-%s", w.config.JobName),
-			Zone:           w.config.Zone,
-			MachineType:    w.config.MachineType,
-			Network:        w.config.Network,
-			Subnet:         w.config.Subnet,
-			ServiceAccount: w.config.ServiceAccount,
-			Preemptible:    w.config.Preemptible,
+			Name:            fmt.Sprintf("cache-builder-%s", w.config.JobName),
+			Zone:            w.config.Zone,
+			MachineType:     w.config.MachineType,
+			Network:         w.config.Network,
+			Subnet:          w.config.Subnet,
+			ServiceAccount:  w.config.ServiceAccount,
+			Preemptible:     w.config.Preemptible,
+			ContainerImages: w.config.ContainerImages,
+			ImagePullAuth:   w.config.ImagePullAuth,
 		}
 
 		vmInstance, err := w.vmManager.CreateVM(ctx, vmConfig)
