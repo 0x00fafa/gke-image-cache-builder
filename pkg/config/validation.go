@@ -57,13 +57,18 @@ func (c *Config) validateModeSpecificFields() error {
 	if c.IsLocalMode() {
 		// Check if running in container environment
 		if isRunningInContainer() {
-			// Allow container environment for testing purposes with a warning
-			// In production, this should be restricted
+			// In container environment, only allow if test mode is enabled
+			if os.Getenv("GKE_IMAGE_CACHE_BUILDER_TEST_MODE") != "true" {
+				return fmt.Errorf("local mode (-L) cannot run in container environments (Docker, Kubernetes) unless GKE_IMAGE_CACHE_BUILDER_TEST_MODE=true is set")
+			}
 			fmt.Println("WARNING: Running in container environment. This is only recommended for testing.")
 		} else {
 			// Check if running on GCP VM (only required for non-container environments)
 			if !isRunningOnGCP() {
-				// Allow non-GCP environments for testing with a warning
+				// Only allow if test mode is enabled
+				if os.Getenv("GKE_IMAGE_CACHE_BUILDER_TEST_MODE") != "true" {
+					return fmt.Errorf("local mode (-L) requires execution on a GCP VM instance with access to the metadata server unless GKE_IMAGE_CACHE_BUILDER_TEST_MODE=true is set")
+				}
 				fmt.Println("WARNING: Not running on GCP VM. This is only recommended for testing.")
 			}
 		}
@@ -72,6 +77,10 @@ func (c *Config) validateModeSpecificFields() error {
 		if c.Zone == "" {
 			zone, err := getCurrentVMZone()
 			if err != nil {
+				// If we can't get zone from metadata server, only allow if test mode is enabled
+				if os.Getenv("GKE_IMAGE_CACHE_BUILDER_TEST_MODE") != "true" {
+					return fmt.Errorf("could not auto-detect zone from GCP metadata server. Please specify --zone parameter or run on a GCP VM unless GKE_IMAGE_CACHE_BUILDER_TEST_MODE=true is set")
+				}
 				// If we can't get zone from metadata server, use a default for testing
 				fmt.Println("WARNING: Could not auto-detect zone. Using default zone 'us-central1-a' for testing.")
 				c.Zone = "us-central1-a"
