@@ -170,9 +170,10 @@ func isRunningInContainer() bool {
 	// Check cgroup for container indicators
 	if data, err := ioutil.ReadFile("/proc/1/cgroup"); err == nil {
 		content := string(data)
-		if strings.Contains(content, "docker") ||
-			strings.Contains(content, "containerd") ||
-			strings.Contains(content, "kubepods") {
+		// More precise check - exclude GCP VM specific indicators
+		if (strings.Contains(content, "docker") ||
+			strings.Contains(content, "containerd")) &&
+			!strings.Contains(content, "google") {
 			return true
 		}
 	}
@@ -188,7 +189,7 @@ func isRunningInContainer() bool {
 // isRunningOnGCP checks if the current environment is a GCP VM
 func isRunningOnGCP() bool {
 	client := &http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 10 * time.Second, // Increased timeout for better reliability
 	}
 
 	// Try to access GCP metadata server

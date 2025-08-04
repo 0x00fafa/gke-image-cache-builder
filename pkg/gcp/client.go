@@ -28,8 +28,14 @@ func NewClient(projectName, credentialsPath string) (*Client, error) {
 	var err error
 
 	if credentialsPath != "" {
+		// Read the credentials file
+		credsData, readErr := ioutil.ReadFile(credentialsPath)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read credentials file: %w", readErr)
+		}
+
 		opts = append(opts, option.WithCredentialsFile(credentialsPath))
-		creds, err = google.CredentialsFromJSON(ctx, nil, compute.ComputeScope)
+		creds, err = google.CredentialsFromJSON(ctx, credsData, compute.ComputeScope)
 	} else {
 		creds, err = google.FindDefaultCredentials(ctx, compute.ComputeScope)
 		if creds != nil {

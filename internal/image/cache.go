@@ -10,6 +10,7 @@ import (
 	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
 	"github.com/0x00fafa/gke-image-cache-builder/internal/scripts"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
+	"github.com/mattn/go-isatty"
 )
 
 // Cache handles container image caching operations with real implementation
@@ -163,10 +164,16 @@ func (c *Cache) CheckExistingImages(ctx context.Context) (*ExistingImagesInfo, e
 
 // promptUserAction prompts the user for action regarding existing images
 func (c *Cache) promptUserAction(existingImages []string) (ImageAction, error) {
-	c.logger.Warn("Existing images detected. Please choose an action:")
+	c.logger.Warnf("Existing images detected. Please choose an action (%d images found):", len(existingImages))
 	c.logger.Info("1. Continue and merge with existing images")
 	c.logger.Info("2. Clean existing images and start fresh")
 	c.logger.Info("3. Cancel operation")
+
+	// Check if running in non-interactive mode
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		c.logger.Info("Non-interactive mode detected, defaulting to continue and merge (option 1)")
+		return ActionMerge, nil
+	}
 
 	// In a real implementation, this would read from stdin
 	// For now, return a default action
