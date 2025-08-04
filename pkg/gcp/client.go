@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -161,6 +162,13 @@ func (c *Client) GetCurrentInstanceMetadata(ctx context.Context) (*InstanceMetad
 
 	nameResp, err := client.Do(nameReq)
 	if err != nil {
+		// Allow non-GCP environments for testing with a special environment variable
+		if os.Getenv("GKE_IMAGE_CACHE_BUILDER_TEST_MODE") == "true" {
+			return &InstanceMetadata{
+				Name: "test-instance",
+				Zone: "us-central1-a",
+			}, nil
+		}
 		return nil, fmt.Errorf("failed to get instance name: %w", err)
 	}
 	defer nameResp.Body.Close()
@@ -179,6 +187,13 @@ func (c *Client) GetCurrentInstanceMetadata(ctx context.Context) (*InstanceMetad
 
 	zoneResp, err := client.Do(zoneReq)
 	if err != nil {
+		// Allow non-GCP environments for testing with a special environment variable
+		if os.Getenv("GKE_IMAGE_CACHE_BUILDER_TEST_MODE") == "true" {
+			return &InstanceMetadata{
+				Name: string(nameBody),
+				Zone: "us-central1-a",
+			}, nil
+		}
 		return nil, fmt.Errorf("failed to get instance zone: %w", err)
 	}
 	defer zoneResp.Body.Close()
