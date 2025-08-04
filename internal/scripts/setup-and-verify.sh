@@ -418,18 +418,31 @@ pull_images() {
         ((current++))
         log_progress "$current" "$total" "Pulling $image"
         
+        # Ensure image name has proper registry prefix for Docker Hub images
+        local full_image_name="$image"
+        if [[ "$image" != *"/"* && "$image" != *"."* ]]; then
+            # This looks like a Docker Hub image without registry prefix
+            full_image_name="docker.io/library/$image"
+        elif [[ "$image" != *"/"* && "$image" == *"."* ]]; then
+            # This looks like a registry without image path
+            full_image_name="$image/library"
+        elif [[ "$image" == *"/"* && "$image" != *"."* && "$image" != *":"* ]]; then
+            # This looks like a Docker Hub user image without registry prefix
+            full_image_name="docker.io/$image"
+        fi
+        
         if [ "$OAUTH_MECHANISM" = "none" ]; then
-            ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$image"
+            ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name"
         elif [ "$OAUTH_MECHANISM" = "serviceaccounttoken" ]; then
             ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" \
-                --user "oauth2accesstoken:$ACCESS_TOKEN" "$image"
+                --user "oauth2accesstoken:$ACCESS_TOKEN" "$full_image_name"
         else
             log_error "Unknown OAuth mechanism: $OAUTH_MECHANISM"
             exit 1
         fi
         
         if [ $? -ne 0 ]; then
-            log_error "Failed to pull image: $image"
+            log_error "Failed to pull image: $full_image_name (from $image)"
             exit 1
         fi
     done
