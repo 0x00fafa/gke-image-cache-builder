@@ -57,29 +57,29 @@ func (w *Workflow) Execute(ctx context.Context) error {
 	// Step 4: Execute image processing based on mode
 	if w.config.IsLocalMode() {
 		if err := w.executeLocalMode(ctx, resources); err != nil {
-			// Cleanup resources on failure
-			w.cleanupResources(ctx, resources)
+			// Temporarily comment out cleanup for debugging purposes
+			// w.cleanupResources(ctx, resources)
 			return fmt.Errorf("local mode execution failed: %w", err)
 		}
 	} else {
 		if err := w.executeRemoteMode(ctx, resources); err != nil {
-			// Cleanup resources on failure
-			w.cleanupResources(ctx, resources)
+			// Temporarily comment out cleanup for debugging purposes
+			// w.cleanupResources(ctx, resources)
 			return fmt.Errorf("remote mode execution failed: %w", err)
 		}
 	}
 
 	// Step 5: Create cache disk image
 	if err := w.createCacheImage(ctx, resources); err != nil {
-		// Cleanup resources on failure
-		w.cleanupResources(ctx, resources)
+		// Temporarily comment out cleanup for debugging purposes
+		// w.cleanupResources(ctx, resources)
 		return fmt.Errorf("cache image creation failed: %w", err)
 	}
 
 	// Step 6: Verify cache image
 	if err := w.verifyCacheImage(ctx); err != nil {
-		// Cleanup resources on failure
-		w.cleanupResources(ctx, resources)
+		// Temporarily comment out cleanup for debugging purposes
+		// w.cleanupResources(ctx, resources)
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
 
