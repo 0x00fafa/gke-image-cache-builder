@@ -34,6 +34,22 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 	// Prepare startup script
 	startupScript := m.generateStartupScript(config)
 
+	// Prepare metadata items
+	metadataItems := []*compute.MetadataItems{
+		{
+			Key:   "startup-script",
+			Value: &startupScript,
+		},
+	}
+
+	// Add SSH key if provided
+	if config.SSHPublicKey != "" {
+		metadataItems = append(metadataItems, &compute.MetadataItems{
+			Key:   "ssh-keys",
+			Value: &config.SSHPublicKey,
+		})
+	}
+
 	instance := &compute.Instance{
 		Name:        config.Name,
 		MachineType: fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", m.gcpClient.ProjectName(), config.Zone, config.MachineType),
@@ -71,12 +87,7 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 			},
 		},
 		Metadata: &compute.Metadata{
-			Items: []*compute.MetadataItems{
-				{
-					Key:   "startup-script",
-					Value: &startupScript,
-				},
-			},
+			Items: metadataItems,
 		},
 		Scheduling: &compute.Scheduling{
 			Preemptible: config.Preemptible,
@@ -99,6 +110,20 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 	// Wait for VM to be running
 	if err := m.waitForVMRunning(ctx, config.Name, config.Zone); err != nil {
 		return nil, fmt.Errorf("VM failed to start: %w", err)
+	}
+
+	// Get the VM instance to retrieve network information
+	vmInstance, err := m.gcpClient.GetInstance(ctx, config.Zone, config.Name)
+	if err != nil {
+		m.logger.Warnf("Failed to get VM instance details: %v", err)
+	} else {
+		// Print the public IP address
+		if len(vmInstance.NetworkInterfaces) > 0 && len(vmInstance.NetworkInterfaces[0].AccessConfigs) > 0 {
+			publicIP := vmInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+			if publicIP != "" {
+				m.logger.Infof("VM public IP address: %s", publicIP)
+			}
+		}
 	}
 
 	m.logger.Successf("VM created successfully: %s", config.Name)
@@ -293,6 +318,7 @@ type Config struct {
 	Preemptible     bool
 	ContainerImages []string
 	ImagePullAuth   string
+	SSHPublicKey    string
 }
 
 // RemoteBuildConfig holds remote build configuration

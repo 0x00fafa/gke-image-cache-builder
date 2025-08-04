@@ -33,6 +33,11 @@ func NewBuilder(cfg *config.Config, logger *log.Logger, gcpClient *gcp.Client) *
 	}
 }
 
+// SetSSHPublicKey sets the SSH public key for VM access
+func (b *Builder) SetSSHPublicKey(key string) {
+	b.config.SSHPublicKey = key
+}
+
 func (b *Builder) BuildImageCache(ctx context.Context) error {
 	b.logger.Info("Starting image cache build process")
 	b.logger.Infof("Disk image name: %s", b.config.DiskImageName)

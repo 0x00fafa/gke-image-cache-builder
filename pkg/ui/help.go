@@ -123,6 +123,13 @@ COMMON OPTIONS:
         --help-examples          Show usage examples
         --help-config            Show configuration file help
 
+ADVANCED OPTIONS:
+    --job-name <NAME>            Build job name
+    --machine-type <TYPE>        VM machine type (default: e2-standard-2)
+    --preemptible                Use preemptible VM (cost savings)
+    --disk-type <TYPE>           Cache disk type (default: pd-standard)
+    --ssh-public-key <PATH>      SSH public key for remote VM access
+
 NETWORK OPTIONS (Remote Mode Only):
     -n, --network <NETWORK>      VPC network for temporary VM (default: default)
     -u, --subnet <SUBNET>        Subnet for temporary VM (default: default)
@@ -396,6 +403,7 @@ advanced:
   job_name: <name>             # Job name
   machine_type: <type>         # VM machine type
   preemptible: true|false      # Use preemptible instances
+  ssh_public_key: <path>       # SSH public key for remote VM access
 
 auth:
   gcp_oauth: <path>            # Service account file path

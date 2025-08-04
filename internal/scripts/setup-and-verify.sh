@@ -611,21 +611,25 @@ execute_full_workflow() {
     local store_checksums="$3"
     shift 3
     local images=("$@")
-    
+
     log_info "Starting full image cache build workflow..."
-    
+    log_info "Device name: $device_name"
+    log_info "Auth mechanism: $auth_mechanism"
+    log_info "Store checksums: $store_checksums"
+    log_info "Images to process: ${images[*]}"
+
     # Step 1: Setup system environment
     setup_system_environment
-    
+
     # Step 2: Setup containerd
     setup_containerd
-    
+
     # Step 3: Prepare disk
     prepare_disk_operations "$device_name" "$MOUNT_POINT"
-    
+
     # Step 4: Pull and process images
     pull_and_process_images "$auth_mechanism" "$store_checksums" "${images[@]}"
-    
+
     log_success "Full workflow completed successfully"
 }
 

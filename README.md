@@ -64,6 +64,7 @@ After analyzing the original `gke-disk-image-builder`, we identified several key
 - Flexible timeout settings
 - Custom machine types and disk configurations
 - Advanced labeling and tagging
+- SSH public key support for remote VM access
 
 ### 📚 **Rich Help System**
 - Context-aware error messages with solutions
@@ -385,6 +386,17 @@ docker run [docker-options] gke-image-cache-builder [tool-options]
 | `logging` | `quiet` | Quiet mode | `false` |
 
 ### Advanced Examples
+
+#### SSH Key Access for Remote Mode
+```bash
+# Provide SSH public key for remote VM access
+gke-image-cache-builder -R \
+   --zone=us-west1-b \
+   --project-name=my-project \
+   --disk-image-name=web-cache \
+   --ssh-public-key=~/.ssh/id_rsa.pub \
+   --container-image=nginx:latest
+```
 
 #### Multi-Environment Setup
 ```bash

@@ -45,10 +45,11 @@ type NetworkConfig struct {
 }
 
 type AdvancedConfig struct {
-	Timeout     string `yaml:"timeout,omitempty"`
-	JobName     string `yaml:"job_name,omitempty"`
-	MachineType string `yaml:"machine_type,omitempty"`
-	Preemptible bool   `yaml:"preemptible,omitempty"`
+	Timeout      string `yaml:"timeout,omitempty"`
+	JobName      string `yaml:"job_name,omitempty"`
+	MachineType  string `yaml:"machine_type,omitempty"`
+	Preemptible  bool   `yaml:"preemptible,omitempty"`
+	SSHPublicKey string `yaml:"ssh_public_key,omitempty"`
 }
 
 type AuthConfig struct {
@@ -180,6 +181,11 @@ func (c *Config) applyYAMLConfig(yamlConfig *YAMLConfig, filePath string) error 
 
 	if !c.Preemptible && yamlConfig.Advanced.Preemptible { // default is false
 		c.Preemptible = yamlConfig.Advanced.Preemptible
+	}
+
+	// SSH Public Key
+	if c.SSHPublicKey == "" && yamlConfig.Advanced.SSHPublicKey != "" {
+		c.SSHPublicKey = yamlConfig.Advanced.SSHPublicKey
 	}
 
 	// Authentication
@@ -348,6 +354,7 @@ advanced:
   job_name: production-cache-build
   machine_type: e2-standard-4  # VM machine type for remote builds
   preemptible: true  # Use preemptible instances for cost savings
+  # ssh_public_key: "ssh-rsa AAAAB3NzaC1yc2E... user@host"  # SSH public key for VM access
 
 # Authentication configuration
 auth:

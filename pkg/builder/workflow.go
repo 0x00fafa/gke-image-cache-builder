@@ -176,6 +176,7 @@ func (w *Workflow) setupEnvironment(ctx context.Context) (*WorkflowResources, er
 			Preemptible:     w.config.Preemptible,
 			ContainerImages: w.config.ContainerImages,
 			ImagePullAuth:   w.config.ImagePullAuth,
+			SSHPublicKey:    w.config.SSHPublicKey,
 		}
 
 		vmInstance, err := w.vmManager.CreateVM(ctx, vmConfig)
@@ -250,6 +251,14 @@ func (w *Workflow) executeLocalMode(ctx context.Context, resources *WorkflowReso
 
 func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowResources) error {
 	w.logger.Info("Executing remote mode image processing...")
+
+	// Get device path for the attached disk
+	devicePath, err := w.diskManager.GetAttachedDiskDevicePath(ctx, resources.CacheDisk.Name, resources.VMInstance.Name, w.config.Zone)
+	if err != nil {
+		return fmt.Errorf("failed to get device path: %w", err)
+	}
+
+	w.logger.Infof("Using device path: %s", devicePath)
 
 	// Execute remote build on the temporary VM
 	remoteBuildConfig := &vm.RemoteBuildConfig{

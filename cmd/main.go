@@ -89,6 +89,9 @@ func main() {
 	preemptible := flag.Bool("preemptible", false, "Use preemptible VM for -R mode")
 	diskType := flag.String("disk-type", "pd-standard", "Cache disk type")
 
+	// SSH options
+	flag.StringVar(&cfg.SSHPublicKey, "ssh-public-key", "", "SSH public key for VM access")
+
 	// Help options
 	helpFull := flag.Bool("help-full", false, "Show complete help")
 	helpExamples := flag.Bool("help-examples", false, "Show usage examples")
