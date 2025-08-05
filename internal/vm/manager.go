@@ -237,31 +237,61 @@ SCRIPT_EOF
 
 chmod +x /tmp/setup-and-verify.sh
 
-# Execute setup only (environment preparation)
-/tmp/setup-and-verify.sh setup
+# Execute the full workflow in background to avoid blocking startup
+{
+    # Wait for system to be fully ready
+    sleep 30
+    
+    echo "Starting full GKE Image Cache Builder workflow..."
+    
+    # Execute setup (environment preparation)
+    /tmp/setup-and-verify.sh setup
+    
+    # Setup containerd
+    /tmp/setup-and-verify.sh setup-containerd
+    
+    echo "Environment setup completed."
+    
+    # Create a flag file to indicate environment is ready
+    touch /tmp/environment_ready.flag
+    
+    # Wait for the disk to be attached by the main process
+    echo "Waiting for disk to be attached..."
+    for i in {1..60}; do  # Wait up to 5 minutes
+        if [ -b /dev/disk/by-id/google-secondary-disk-image-disk ]; then
+            echo "Disk attached successfully"
+            break
+        fi
+        echo "Waiting for disk... ($i/60)"
+        sleep 5
+    done
+    
+    # Check if disk is attached
+    if [ ! -b /dev/disk/by-id/google-secondary-disk-image-disk ]; then
+        echo "ERROR: Disk not attached within timeout period"
+        # Log available disks for debugging
+        echo "Available disks:"
+        ls -la /dev/disk/by-id/
+        exit 1
+    fi
+    
+    echo "Disk attached, starting image processing..."
+    
+    # Wait a bit more for containerd to be fully ready
+    sleep 30
+    
+    # Execute the full workflow
+    /tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + authMechanism + ` true ` + images + `
+    
+    echo "Unpacking is completed."
+    
+    # Create completion flag
+    touch /tmp/workflow_completed.flag
+    
+    echo "Full workflow completed successfully"
+} &
 
-# Setup containerd
-/tmp/setup-and-verify.sh setup-containerd
-
-echo "Environment setup completed."
-
-# Create a flag file to indicate environment is ready
-touch /tmp/environment_ready.flag
-
-# Wait for the disk to be attached by the main process
-echo "Waiting for disk to be attached..."
-while [ ! -b /dev/disk/by-id/google-secondary-disk-image-disk ]; do
-  sleep 5
-done
-
-echo "Disk attached, starting image processing..."
-
-# Execute the full workflow
-/tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + authMechanism + ` true ` + images + `
-
-echo "Unpacking is completed."
-
-echo "Setup completed successfully"
+echo "Setup script initiated in background"
 `
 	return script
 }
