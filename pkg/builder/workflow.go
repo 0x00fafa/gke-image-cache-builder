@@ -40,12 +40,14 @@ func NewWorkflow(cfg *config.Config, logger *log.Logger, vmMgr *vm.Manager, disk
 func (w *Workflow) Execute(ctx context.Context) error {
 	// Step 1: Validate prerequisites
 	if err := w.validatePrerequisites(ctx); err != nil {
+		w.scheduleCleanup(ctx, nil, 5*time.Minute)
 		return fmt.Errorf("prerequisite validation failed: %w", err)
 	}
 
 	// Step 2: Check existing images (local mode only)
 	if w.config.IsLocalMode() {
 		if err := w.handleExistingImages(ctx); err != nil {
+			w.scheduleCleanup(ctx, nil, 5*time.Minute)
 			return fmt.Errorf("existing images handling failed: %w", err)
 		}
 	}
@@ -53,41 +55,37 @@ func (w *Workflow) Execute(ctx context.Context) error {
 	// Step 3: Setup execution environment
 	resources, err := w.setupEnvironment(ctx)
 	if err != nil {
+		w.scheduleCleanup(ctx, resources, 5*time.Minute)
 		return fmt.Errorf("environment setup failed: %w", err)
 	}
 
 	// Step 4: Execute image processing based on mode
 	if w.config.IsLocalMode() {
 		if err := w.executeLocalMode(ctx, resources); err != nil {
-			// Temporarily comment out cleanup for debugging purposes
-			// w.cleanupResources(ctx, resources)
+			w.scheduleCleanup(ctx, resources, 5*time.Minute)
 			return fmt.Errorf("local mode execution failed: %w", err)
 		}
 	} else {
 		if err := w.executeRemoteMode(ctx, resources); err != nil {
-			// Temporarily comment out cleanup for debugging purposes
-			// w.cleanupResources(ctx, resources)
+			w.scheduleCleanup(ctx, resources, 5*time.Minute)
 			return fmt.Errorf("remote mode execution failed: %w", err)
 		}
 	}
 
 	// Step 5: Create cache disk image
 	if err := w.createCacheImage(ctx, resources); err != nil {
-		// Temporarily comment out cleanup for debugging purposes
-		// w.cleanupResources(ctx, resources)
+		w.scheduleCleanup(ctx, resources, 5*time.Minute)
 		return fmt.Errorf("cache image creation failed: %w", err)
 	}
 
 	// Step 6: Verify cache image
 	if err := w.verifyCacheImage(ctx); err != nil {
-		// Temporarily comment out cleanup for debugging purposes
-		// w.cleanupResources(ctx, resources)
+		w.scheduleCleanup(ctx, resources, 5*time.Minute)
 		return fmt.Errorf("cache image verification failed: %w", err)
 	}
 
-	// Step 7: Cleanup resources on success
-	// Temporarily comment out cleanup for debugging purposes
-	// w.cleanupResources(ctx, resources)
+	// Step 7: Cleanup resources on success after 5 minutes
+	w.scheduleCleanup(ctx, resources, 5*time.Minute)
 
 	return nil
 }
@@ -473,6 +471,21 @@ func getLastNCharacters(s string, n int) string {
 		return s
 	}
 	return s[len(s)-n:]
+}
+
+// scheduleCleanup schedules cleanup of resources after a delay
+func (w *Workflow) scheduleCleanup(ctx context.Context, resources *WorkflowResources, delay time.Duration) {
+	go func() {
+		// Create a new context for cleanup that is not tied to the original context
+		cleanupCtx := context.Background()
+
+		w.logger.Infof("Scheduling cleanup in %v...", delay)
+		time.Sleep(delay)
+
+		if resources != nil {
+			w.cleanupResources(cleanupCtx, resources)
+		}
+	}()
 }
 
 // WorkflowResources holds references to temporary resources
