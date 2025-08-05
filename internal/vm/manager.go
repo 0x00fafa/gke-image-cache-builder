@@ -240,18 +240,19 @@ chmod +x /tmp/setup-and-verify.sh
 # Execute the full workflow in background to avoid blocking startup
 {
     # Wait for system to be fully ready
-    sleep 30
+    echo "Initial system wait..."
+    sleep 60
     
     echo "Starting full GKE Image Cache Builder workflow..."
     
     # Wait for the disk to be attached by the main process
     echo "Waiting for disk to be attached..."
-    for i in {1..60}; do  # Wait up to 5 minutes
+    for i in {1..120}; do  # Wait up to 10 minutes
         if [ -b /dev/disk/by-id/google-secondary-disk-image-disk ]; then
             echo "Disk attached successfully"
             break
         fi
-        echo "Waiting for disk... ($i/60)"
+        echo "Waiting for disk... ($i/120)"
         sleep 5
     done
     
@@ -264,44 +265,69 @@ chmod +x /tmp/setup-and-verify.sh
         exit 1
     fi
     
+    # Additional wait after disk attachment
+    echo "Waiting for system to stabilize after disk attachment..."
+    sleep 30
+    
     # Mount the disk first
     echo "Mounting disk..."
     /tmp/setup-and-verify.sh prepare-disk secondary-disk-image-disk
+    echo "Disk mounted successfully"
+    
+    # Additional wait after disk mounting
+    echo "Waiting for system to stabilize after disk mounting..."
+    sleep 30
     
     # Execute setup (environment preparation)
+    echo "Setting up system environment..."
     /tmp/setup-and-verify.sh setup
+    echo "System environment setup completed"
+    
+    # Additional wait after system setup
+    echo "Waiting for system to stabilize after environment setup..."
+    sleep 30
     
     # Setup containerd
+    echo "Setting up containerd..."
     /tmp/setup-and-verify.sh setup-containerd
+    echo "Containerd setup completed"
     
     echo "Environment setup completed."
     
     # Create a flag file to indicate environment is ready
     touch /tmp/environment_ready.flag
+    echo "Environment ready flag created"
     
     echo "Disk mounted and environment ready, starting image processing..."
     
     # Wait for containerd to be fully ready
     echo "Waiting for containerd to be ready..."
-    for i in {1..60}; do  # Wait up to 5 minutes
-        if systemctl is-active --quiet containerd && ctr version | grep -q "Server:"; then
-            echo "containerd is ready"
-            break
+    for i in {1..120}; do  # Wait up to 10 minutes
+        if systemctl is-active --quiet containerd; then
+            echo "containerd service is active"
+            # Check if we can communicate with containerd
+            if /usr/local/bin/ctr version | grep -q "Server:"; then
+                echo "containerd is ready for communication"
+                break
+            fi
         fi
-        echo "Waiting for containerd to be ready... ($i/60)"
+        echo "Waiting for containerd to be ready... ($i/120)"
         sleep 5
     done
     
     # Additional wait to ensure containerd is fully initialized
-    sleep 30
+    echo "Waiting for containerd to fully initialize..."
+    sleep 60
     
     # Execute the image processing
+    echo "Starting image processing..."
     /tmp/setup-and-verify.sh pull-images ` + authMechanism + ` true ` + images + `
     
     echo "Unpacking is completed."
     
     # Create completion flag
     touch /tmp/workflow_completed.flag
+    echo "Workflow completion flag created"
     
     echo "Full workflow completed successfully"
 } &

@@ -322,12 +322,17 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 
 	// First, let's wait a bit for the VM to fully boot and start executing the startup script
 	w.logger.Info("⏳ Initial wait for VM to boot and start executing startup script...")
-	time.Sleep(60 * time.Second)
+	time.Sleep(120 * time.Second) // Increased to 2 minutes
 
 	for {
 		select {
 		case <-timeoutCtx.Done():
 			w.logger.Error("❌ Timeout waiting for remote environment")
+			// Log the final serial console output for debugging
+			output, err := w.getRemoteCommandOutput(ctx, instance, "")
+			if err == nil {
+				w.logger.Debugf("Final serial console output: %s", getLastNCharacters(output, 2000))
+			}
 			return fmt.Errorf("timeout waiting for remote environment")
 		case <-ticker.C:
 			// Check serial console output for completion signal
@@ -343,15 +348,21 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 				return nil
 			}
 
+			// Also check for the new completion flag
+			if strings.Contains(output, "Full workflow completed successfully") {
+				w.logger.Success("✅ Remote environment is ready")
+				return nil
+			}
+
 			// Also check for errors
 			if strings.Contains(output, "ERROR") || strings.Contains(output, "Failed") {
 				w.logger.Error("❌ Remote environment setup failed")
-				w.logger.Debugf("Serial console output: %s", output)
+				w.logger.Debugf("Serial console output: %s", getLastNCharacters(output, 2000))
 				return fmt.Errorf("remote environment setup failed")
 			}
 
 			w.logger.Info("⏳ Remote environment is not ready yet, waiting...")
-			w.logger.Debugf("Last 500 characters of serial console output: %s", getLastNCharacters(output, 500))
+			w.logger.Debugf("Last 1000 characters of serial console output: %s", getLastNCharacters(output, 1000))
 		}
 	}
 }
