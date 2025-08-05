@@ -276,26 +276,57 @@ func (c *Client) ExecuteCommandWithProgress(ctx context.Context, host, command s
 func (c *Client) WaitForSSHReady(ctx context.Context, host string) error {
 	c.logger.Infof("Waiting for SSH to be ready on %s...", host)
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	// Increase timeout to 10 minutes to account for VM boot time
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
+	// Add initial delay to allow VM to boot
+	c.logger.Info("Initial delay to allow VM to fully boot...")
+	time.Sleep(90 * time.Second)
+
+	attempt := 0
 	for {
 		select {
 		case <-timeoutCtx.Done():
 			return fmt.Errorf("timeout waiting for SSH to be ready on %s", host)
 		case <-ticker.C:
+			attempt++
+			c.logger.Infof("SSH connection attempt %d...", attempt)
+
 			// Try to connect
 			client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", host), c.config)
 			if err != nil {
-				c.logger.Debugf("SSH not ready yet: %v", err)
+				c.logger.Debugf("SSH not ready yet (attempt %d): %v", attempt, err)
 				continue
 			}
+
+			// Test the connection with a simple command
+			session, err := client.NewSession()
+			if err != nil {
+				client.Close()
+				c.logger.Debugf("Failed to create SSH session (attempt %d): %v", attempt, err)
+				continue
+			}
+
+			// Run a simple command to verify the connection is fully working
+			output, err := session.Output("echo 'SSH connection test'")
+			session.Close()
 			client.Close()
-			c.logger.Success("SSH is ready")
-			return nil
+
+			if err != nil {
+				c.logger.Debugf("SSH command test failed (attempt %d): %v", attempt, err)
+				continue
+			}
+
+			if strings.Contains(string(output), "SSH connection test") {
+				c.logger.Success("SSH is ready and fully functional")
+				return nil
+			}
+
+			c.logger.Debugf("SSH command test returned unexpected output (attempt %d): %s", attempt, string(output))
 		}
 	}
 }
