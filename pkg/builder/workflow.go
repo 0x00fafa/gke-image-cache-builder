@@ -347,6 +347,7 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 		w.logger.Info("⏳ Waiting for SSH to be ready...")
 		if err := w.sshClient.WaitForSSHReady(ctx, publicIP); err != nil {
 			w.logger.Warnf("SSH not available, falling back to serial console: %v", err)
+			// Continue with serial console method
 		} else {
 			w.logger.Success("✅ SSH is ready")
 			return nil
@@ -475,6 +476,29 @@ func (w *Workflow) executeRemoteImageProcessing(ctx context.Context, resources *
 	if w.sshClient == nil {
 		return fmt.Errorf("SSH client not available")
 	}
+
+	// First, we need to get the setup script from the VM metadata and save it to /tmp/setup-and-verify.sh
+	setupScriptCmd := "curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/attributes/setup-script > /tmp/setup-and-verify.sh && chmod +x /tmp/setup-and-verify.sh"
+
+	w.logger.Info("Downloading setup script to remote VM...")
+	output, err := w.sshClient.ExecuteCommandWithProgress(ctx, publicIP, setupScriptCmd, func(progress string) {
+		// Log progress output
+		lines := strings.Split(strings.TrimSpace(progress), "\n")
+		for _, line := range lines {
+			if line != "" {
+				w.logger.Debugf("SSH output: %s", line)
+			}
+		}
+	})
+
+	if err != nil {
+		w.logger.Errorf("Failed to download setup script: %s", setupScriptCmd)
+		w.logger.Debugf("Command output: %s", output)
+		return fmt.Errorf("failed to download setup script: %w", err)
+	}
+
+	w.logger.Debugf("Setup script download output: %s", output)
+	w.logger.Success("Setup script downloaded successfully")
 
 	// Generate the commands to execute on the remote VM
 	images := "nginx:latest" // Default fallback
