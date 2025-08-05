@@ -9,6 +9,8 @@ import (
 
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/builder"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/ui"
 )
 
@@ -47,7 +49,6 @@ func main() {
 	// Required parameters
 	flag.StringVar(&cfg.ProjectName, "project-name", "", "GCP project name")
 	flag.StringVar(&cfg.DiskImageName, "disk-image-name", "", "Name for the disk image")
-
 	// Container images (repeatable)
 	var containerImages stringSlice
 	flag.Var(&containerImages, "container-image", "Container image to cache (repeatable)")
@@ -61,15 +62,15 @@ func main() {
 	flag.StringVar(&cfg.Subnet, "subnet", cfg.Subnet, "Subnet for build VM (remote mode only)")
 
 	// Cache configuration
-	flag.IntVar(&cfg.DiskSizeGB, "s", cfg.DiskSizeGB, "Disk size in GB")         // 改为 DiskSizeGB
-	flag.IntVar(&cfg.DiskSizeGB, "disk-size", cfg.DiskSizeGB, "Disk size in GB") // 改为 DiskSizeGB
+	flag.IntVar(&cfg.DiskSizeGB, "s", cfg.DiskSizeGB, "Disk size in GB")
+	flag.IntVar(&cfg.DiskSizeGB, "disk-size-gb", cfg.DiskSizeGB, "Disk size in GB")
 	flag.DurationVar(&cfg.Timeout, "t", cfg.Timeout, "Build timeout")
 	flag.DurationVar(&cfg.Timeout, "timeout", cfg.Timeout, "Build timeout")
 
 	// Image management
-	flag.StringVar(&cfg.DiskFamilyName, "disk-family", cfg.DiskFamilyName, "Image family name") // 改为 DiskFamilyName
-	var diskLabels stringMap                                                                    // 改为 diskLabels
-	flag.Var(&diskLabels, "disk-labels", "Disk labels (key=value, repeatable)")                 // 改为 disk-labels
+	flag.StringVar(&cfg.DiskFamilyName, "disk-family", cfg.DiskFamilyName, "Image family name")
+	var diskLabels stringMap
+	flag.Var(&diskLabels, "disk-labels", "Disk labels (key=value, repeatable)")
 
 	// Authentication
 	flag.StringVar(&cfg.GCPOAuth, "gcp-oauth", "", "Path to GCP service account credential file")
@@ -87,6 +88,9 @@ func main() {
 	machineType := flag.String("machine-type", "e2-standard-2", "VM machine type for -R mode")
 	preemptible := flag.Bool("preemptible", false, "Use preemptible VM for -R mode")
 	diskType := flag.String("disk-type", "pd-standard", "Cache disk type")
+
+	// SSH options
+	flag.StringVar(&cfg.SSHPublicKey, "ssh-public-key", "", "SSH public key for VM access")
 
 	// Help options
 	helpFull := flag.Bool("help-full", false, "Show complete help")
@@ -157,12 +161,13 @@ func main() {
 	if len(containerImages) > 0 {
 		cfg.ContainerImages = []string(containerImages)
 	}
-	if len(diskLabels) > 0 { // 改为 diskLabels
-		if cfg.DiskLabels == nil { // 改为 DiskLabels
-			cfg.DiskLabels = make(map[string]string) // 改为 DiskLabels
+
+	if len(diskLabels) > 0 {
+		if cfg.DiskLabels == nil {
+			cfg.DiskLabels = make(map[string]string)
 		}
-		for k, v := range diskLabels { // 改为 diskLabels
-			cfg.DiskLabels[k] = v // Command line labels override config file labels  // 改为 DiskLabels
+		for k, v := range diskLabels {
+			cfg.DiskLabels[k] = v // Command line labels override config file labels
 		}
 	}
 
@@ -178,12 +183,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create and run builder
-	builder, err := builder.NewBuilder(cfg)
+	// Create logger
+	logger := log.NewConsoleLogger(*verbose, *quiet)
+
+	// Create GCP client
+	gcpClient, err := gcp.NewClient(cfg.ProjectName, cfg.GCPOAuth)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create builder: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create GCP client: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Create and run builder
+	builder := builder.NewBuilder(cfg, logger, gcpClient)
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()

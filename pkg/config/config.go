@@ -41,6 +41,9 @@ type Config struct {
 	Preemptible bool
 	DiskType    string
 
+	// SSH options
+	SSHPublicKey string
+
 	// Logging options (console only, no GCS)
 	Verbose bool
 	Quiet   bool

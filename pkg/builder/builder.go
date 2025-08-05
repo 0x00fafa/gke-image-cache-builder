@@ -4,64 +4,63 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/0x00fafa/gke-image-cache-builder/internal/auth"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
+
 	"github.com/0x00fafa/gke-image-cache-builder/internal/disk"
 	"github.com/0x00fafa/gke-image-cache-builder/internal/image"
 	"github.com/0x00fafa/gke-image-cache-builder/internal/vm"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
-	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
 
-// Builder handles the image cache creation process
 type Builder struct {
 	config      *config.Config
-	gcpClient   *gcp.Client
 	logger      *log.Logger
-	authManager *auth.Manager
+	gcpClient   *gcp.Client
 	vmManager   *vm.Manager
 	diskManager *disk.Manager
 	imageCache  *image.Cache
 }
 
-// NewBuilder creates a new Builder instance
-func NewBuilder(cfg *config.Config) (*Builder, error) {
-	// Initialize logger (console only, no GCS)
-	logger := log.NewConsoleLogger(cfg.Verbose, cfg.Quiet)
-
-	// Initialize GCP client
-	gcpClient, err := gcp.NewClient(cfg.ProjectName, cfg.GCPOAuth)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GCP client: %w", err)
-	}
-
-	// Initialize managers
-	authManager := auth.NewManager(cfg.GCPOAuth, cfg.ImagePullAuth)
-	vmManager := vm.NewManager(gcpClient, logger)
-	diskManager := disk.NewManager(gcpClient, logger)
-	imageCache := image.NewCache(logger)
-
+func NewBuilder(cfg *config.Config, logger *log.Logger, gcpClient *gcp.Client) *Builder {
 	return &Builder{
 		config:      cfg,
-		gcpClient:   gcpClient,
 		logger:      logger,
-		authManager: authManager,
-		vmManager:   vmManager,
-		diskManager: diskManager,
-		imageCache:  imageCache,
-	}, nil
+		gcpClient:   gcpClient,
+		vmManager:   vm.NewManager(gcpClient, logger),
+		diskManager: disk.NewManager(gcpClient, logger),
+		imageCache:  image.NewCache(logger),
+	}
 }
 
-// BuildImageCache orchestrates the entire image cache creation process
+// SetSSHPublicKey sets the SSH public key for VM access
+func (b *Builder) SetSSHPublicKey(key string) {
+	b.config.SSHPublicKey = key
+}
+
 func (b *Builder) BuildImageCache(ctx context.Context) error {
 	b.logger.Info("Starting image cache build process")
 	b.logger.Infof("Disk image name: %s", b.config.DiskImageName)
 	b.logger.Infof("Container images: %v", b.config.ContainerImages)
 
-	workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache)
+	// Create a channel to signal when the build is done
+	buildDone := make(chan struct{})
 
-	if err := workflow.Execute(ctx); err != nil {
-		return fmt.Errorf("workflow execution failed: %w", err)
+	// Start the build in a goroutine
+	var buildErr error
+	go func() {
+		defer close(buildDone)
+		workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache, b.gcpClient)
+		buildErr = workflow.Execute(ctx)
+	}()
+
+	// Wait for the build to complete
+	<-buildDone
+
+	if buildErr != nil {
+		// Even if the build failed, we still return the error
+		// The workflow should have scheduled cleanup
+		return fmt.Errorf("workflow execution failed: %w", buildErr)
 	}
 
 	b.logger.Success("Image cache build completed successfully")
