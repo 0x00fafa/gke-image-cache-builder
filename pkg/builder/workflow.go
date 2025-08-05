@@ -324,6 +324,9 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 	w.logger.Info("⏳ Initial wait for VM to boot and start executing startup script...")
 	time.Sleep(120 * time.Second) // Increased to 2 minutes
 
+	// Track if we've seen any progress
+	seenProgress := false
+
 	for {
 		select {
 		case <-timeoutCtx.Done():
@@ -354,6 +357,15 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 				return nil
 			}
 
+			// Check for progress indicators (temporary files created during execution)
+			if strings.Contains(output, "environment_ready.flag") ||
+				strings.Contains(output, "image_pull_started.flag") ||
+				strings.Contains(output, "Disk mounted successfully") ||
+				strings.Contains(output, "containerd is ready") {
+				seenProgress = true
+				w.logger.Info("✅ Progress detected in remote environment setup")
+			}
+
 			// Also check for errors
 			if strings.Contains(output, "ERROR") || strings.Contains(output, "Failed") {
 				w.logger.Error("❌ Remote environment setup failed")
@@ -361,7 +373,13 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 				return fmt.Errorf("remote environment setup failed")
 			}
 
-			w.logger.Info("⏳ Remote environment is not ready yet, waiting...")
+			// If we've seen progress but haven't completed yet, continue waiting
+			if seenProgress {
+				w.logger.Info("⏳ Remote environment is making progress, waiting for completion...")
+			} else {
+				w.logger.Info("⏳ Remote environment is not ready yet, waiting...")
+			}
+
 			w.logger.Debugf("Last 1000 characters of serial console output: %s", getLastNCharacters(output, 1000))
 		}
 	}
