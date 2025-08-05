@@ -209,12 +209,6 @@ func (m *Manager) ValidatePermissions(ctx context.Context, projectName, zone str
 
 // generateStartupScript generates the startup script for remote VM
 func (m *Manager) generateStartupScript(config *Config) string {
-	// Generate image list as a space-separated string
-	images := "nginx:latest" // Default fallback
-	if len(config.ContainerImages) > 0 {
-		images = strings.Join(config.ContainerImages, " ")
-	}
-
 	script := `#!/bin/bash
 set -e
 
@@ -231,11 +225,16 @@ SCRIPT_EOF
 
 chmod +x /tmp/setup-and-verify.sh
 
-# Execute full workflow with parameters
-/tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + config.ImagePullAuth + ` true ` + images + `
+# Execute setup only (environment preparation)
+/tmp/setup-and-verify.sh setup
 
-# Signal completion
-echo "Unpacking is completed."
+# Setup containerd
+/tmp/setup-and-verify.sh setup-containerd
+
+echo "Environment setup completed."
+
+# Create a flag file to indicate environment is ready
+touch /tmp/environment_ready.flag
 
 echo "Setup completed successfully"
 `
@@ -299,14 +298,19 @@ func (m *Manager) monitorRemoteExecution(ctx context.Context, instanceName, zone
 	}
 }
 
-// getSerialConsoleOutput gets the serial console output from VM
-func (m *Manager) getSerialConsoleOutput(ctx context.Context, instanceName, zone string) (string, error) {
+// GetSerialConsoleOutput gets the serial console output from VM (public method)
+func (m *Manager) GetSerialConsoleOutput(ctx context.Context, instanceName, zone string) (string, error) {
 	output, err := m.gcpClient.Compute().Instances.GetSerialPortOutput(
 		m.gcpClient.ProjectName(), zone, instanceName).Context(ctx).Do()
 	if err != nil {
 		return "", err
 	}
 	return output.Contents, nil
+}
+
+// getSerialConsoleOutput gets the serial console output from VM (private method for backward compatibility)
+func (m *Manager) getSerialConsoleOutput(ctx context.Context, instanceName, zone string) (string, error) {
+	return m.GetSerialConsoleOutput(ctx, instanceName, zone)
 }
 
 // getRegionFromZone extracts region from zone name
