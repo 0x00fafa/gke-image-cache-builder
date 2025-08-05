@@ -486,17 +486,28 @@ func getLastNCharacters(s string, n int) string {
 
 // scheduleCleanup schedules cleanup of resources after a delay
 func (w *Workflow) scheduleCleanup(ctx context.Context, resources *WorkflowResources, delay time.Duration) {
+	w.logger.Infof("Scheduling cleanup in %v...", delay)
+
+	// Create a channel to signal when cleanup is done
+	cleanupDone := make(chan struct{})
+
 	go func() {
 		// Create a new context for cleanup that is not tied to the original context
 		cleanupCtx := context.Background()
 
-		w.logger.Infof("Scheduling cleanup in %v...", delay)
 		time.Sleep(delay)
 
 		if resources != nil {
 			w.cleanupResources(cleanupCtx, resources)
 		}
+
+		// Signal that cleanup is done
+		close(cleanupDone)
 	}()
+
+	// If this is an error case, we might want to wait for cleanup to complete
+	// In success cases, we can let it run in the background
+	// For now, we'll let it run in the background in both cases
 }
 
 // WorkflowResources holds references to temporary resources
