@@ -12,6 +12,7 @@ import (
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/config"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/gcp"
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
+	"github.com/0x00fafa/gke-image-cache-builder/pkg/ssh"
 )
 
 // Workflow manages the step-by-step execution of image cache building
@@ -22,10 +23,18 @@ type Workflow struct {
 	diskManager *disk.Manager
 	imageCache  *image.Cache
 	gcpClient   *gcp.Client
+	sshClient   *ssh.Client
 }
 
 // NewWorkflow creates a new workflow instance
 func NewWorkflow(cfg *config.Config, logger *log.Logger, vmMgr *vm.Manager, diskMgr *disk.Manager, imgCache *image.Cache, gcpClient *gcp.Client) *Workflow {
+	// Create SSH client
+	sshClient, err := ssh.NewClient(logger)
+	if err != nil {
+		logger.Warnf("Failed to create SSH client: %v", err)
+		// We'll continue without SSH client and fall back to serial console
+	}
+
 	return &Workflow{
 		config:      cfg,
 		logger:      logger,
@@ -33,6 +42,7 @@ func NewWorkflow(cfg *config.Config, logger *log.Logger, vmMgr *vm.Manager, disk
 		diskManager: diskMgr,
 		imageCache:  imgCache,
 		gcpClient:   gcpClient,
+		sshClient:   sshClient,
 	}
 }
 
@@ -314,6 +324,36 @@ func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowRes
 func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.Instance) error {
 	w.logger.Info("⏳ Waiting for remote environment to be ready...")
 
+	// Get the VM instance to retrieve network information
+	vmInstance, err := w.gcpClient.GetInstance(ctx, instance.Zone, instance.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get VM instance details: %w", err)
+	}
+
+	// Get the public IP address
+	var publicIP string
+	if len(vmInstance.NetworkInterfaces) > 0 && len(vmInstance.NetworkInterfaces[0].AccessConfigs) > 0 {
+		publicIP = vmInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+	}
+
+	if publicIP == "" {
+		return fmt.Errorf("failed to get public IP address for VM")
+	}
+
+	w.logger.Infof("VM public IP address: %s", publicIP)
+
+	// Wait for SSH to be ready
+	if w.sshClient != nil {
+		w.logger.Info("⏳ Waiting for SSH to be ready...")
+		if err := w.sshClient.WaitForSSHReady(ctx, publicIP); err != nil {
+			w.logger.Warnf("SSH not available, falling back to serial console: %v", err)
+		} else {
+			w.logger.Success("✅ SSH is ready")
+			return nil
+		}
+	}
+
+	// Fallback to serial console method
 	timeoutCtx, cancel := context.WithTimeout(ctx, w.config.Timeout)
 	defer cancel()
 
@@ -413,31 +453,69 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 func (w *Workflow) executeRemoteImageProcessing(ctx context.Context, resources *WorkflowResources) error {
 	w.logger.Info("Executing remote image processing...")
 
-	// Generate the command to execute on the remote VM
+	// Get the VM instance to retrieve network information
+	vmInstance, err := w.gcpClient.GetInstance(ctx, resources.VMInstance.Zone, resources.VMInstance.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get VM instance details: %w", err)
+	}
+
+	// Get the public IP address
+	var publicIP string
+	if len(vmInstance.NetworkInterfaces) > 0 && len(vmInstance.NetworkInterfaces[0].AccessConfigs) > 0 {
+		publicIP = vmInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+	}
+
+	if publicIP == "" {
+		return fmt.Errorf("failed to get public IP address for VM")
+	}
+
+	w.logger.Infof("VM public IP address: %s", publicIP)
+
+	// Check if we have SSH client available
+	if w.sshClient == nil {
+		return fmt.Errorf("SSH client not available")
+	}
+
+	// Generate the commands to execute on the remote VM
 	images := "nginx:latest" // Default fallback
 	if len(w.config.ContainerImages) > 0 {
 		images = strings.Join(w.config.ContainerImages, " ")
 	}
 
-	command := fmt.Sprintf(
-		"/tmp/setup-and-verify.sh prepare-disk secondary-disk-image-disk && "+
-			"/tmp/setup-and-verify.sh pull-images %s true %s && "+
-			"echo 'Unpacking is completed.'",
-		w.config.ImagePullAuth,
-		images,
-	)
-
-	// Execute the command on the remote VM
-	output, err := w.getRemoteCommandOutput(ctx, resources.VMInstance, command)
-	if err != nil {
-		return fmt.Errorf("failed to execute remote image processing: %w", err)
+	// Commands to execute
+	commands := []string{
+		"sudo /tmp/setup-and-verify.sh prepare-disk secondary-disk-image-disk",
+		fmt.Sprintf("sudo /tmp/setup-and-verify.sh pull-images %s true %s", w.config.ImagePullAuth, images),
+		"echo 'Unpacking is completed.'",
 	}
 
-	w.logger.Debugf("Remote command output: %s", output)
+	// Execute commands with progress monitoring
+	for i, cmd := range commands {
+		w.logger.Infof("Executing command %d/%d: %s", i+1, len(commands), cmd)
 
-	// Check if the command completed successfully
-	if !strings.Contains(output, "Unpacking is completed.") {
-		return fmt.Errorf("remote image processing did not complete successfully")
+		output, err := w.sshClient.ExecuteCommandWithProgress(ctx, publicIP, cmd, func(progress string) {
+			// Log progress output
+			lines := strings.Split(strings.TrimSpace(progress), "\n")
+			for _, line := range lines {
+				if line != "" {
+					w.logger.Debugf("SSH output: %s", line)
+				}
+			}
+		})
+
+		if err != nil {
+			w.logger.Errorf("Failed to execute command: %s", cmd)
+			w.logger.Debugf("Command output: %s", output)
+			return fmt.Errorf("failed to execute remote command '%s': %w", cmd, err)
+		}
+
+		w.logger.Debugf("Command output: %s", output)
+
+		// Check if this was the final command and it completed successfully
+		if i == len(commands)-1 && strings.Contains(output, "Unpacking is completed.") {
+			w.logger.Success("Remote image processing completed successfully")
+			return nil
+		}
 	}
 
 	return nil
