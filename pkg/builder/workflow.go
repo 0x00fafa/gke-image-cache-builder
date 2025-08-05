@@ -314,32 +314,46 @@ func (w *Workflow) executeRemoteMode(ctx context.Context, resources *WorkflowRes
 
 // waitForRemoteEnvironment waits for the remote environment to be ready
 func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.Instance) error {
-	w.logger.Info("Waiting for remote environment to be ready...")
+	w.logger.Info("⏳ Waiting for remote environment to be ready...")
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, w.config.Timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
+	// First, let's wait a bit for the VM to fully boot and start executing the startup script
+	w.logger.Info("⏳ Initial wait for VM to boot and start executing startup script...")
+	time.Sleep(60 * time.Second)
 
 	for {
 		select {
 		case <-timeoutCtx.Done():
+			w.logger.Error("❌ Timeout waiting for remote environment")
 			return fmt.Errorf("timeout waiting for remote environment")
 		case <-ticker.C:
-			// Check if environment is ready by looking for flag file
-			output, err := w.getRemoteCommandOutput(ctx, instance, "test -f /tmp/environment_ready.flag && echo 'READY' || echo 'NOT_READY'")
+			// Check serial console output for completion signal
+			output, err := w.getRemoteCommandOutput(ctx, instance, "")
 			if err != nil {
-				w.logger.Debugf("Failed to check environment status: %v", err)
+				w.logger.Debugf("⚠️ Failed to get serial console output: %v", err)
 				continue
 			}
 
-			if strings.Contains(output, "READY") {
-				w.logger.Info("Remote environment is ready")
+			// Look for specific completion messages in the output
+			if strings.Contains(output, "Environment setup completed.") && strings.Contains(output, "environment_ready.flag") {
+				w.logger.Success("✅ Remote environment is ready")
 				return nil
 			}
 
-			w.logger.Debug("Remote environment is not ready yet, waiting...")
+			// Also check for errors
+			if strings.Contains(output, "ERROR") || strings.Contains(output, "Failed") {
+				w.logger.Error("❌ Remote environment setup failed")
+				w.logger.Debugf("Serial console output: %s", output)
+				return fmt.Errorf("remote environment setup failed")
+			}
+
+			w.logger.Info("⏳ Remote environment is not ready yet, waiting...")
+			w.logger.Debugf("Last 500 characters of serial console output: %s", getLastNCharacters(output, 500))
 		}
 	}
 }
@@ -451,6 +465,14 @@ func (w *Workflow) cleanupResources(ctx context.Context, resources *WorkflowReso
 	}
 
 	w.logger.Info("Resource cleanup completed")
+}
+
+// getLastNCharacters returns the last n characters of a string
+func getLastNCharacters(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 // WorkflowResources holds references to temporary resources

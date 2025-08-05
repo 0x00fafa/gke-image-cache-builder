@@ -414,9 +414,15 @@ pull_images() {
     
     log_info "Pulling $total container images..."
     
+    # Create marker file to indicate we're starting image pulling
+    touch /tmp/image_pull_started.flag
+    
     for image in "${images[@]}"; do
         ((current++))
         log_progress "$current" "$total" "Pulling $image"
+        
+        # Create marker file for current image
+        echo "$image" > "/tmp/pulling_image_${current}.flag"
         
         # Ensure image name has proper registry prefix for Docker Hub images
         local full_image_name="$image"
@@ -431,22 +437,38 @@ pull_images() {
             fi
         fi
         
+        # Log the full image name we're pulling
+        log_info "Pulling full image name: $full_image_name"
+        
         if [ "$OAUTH_MECHANISM" = "none" ]; then
+            log_info "Executing: ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
             ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name"
         elif [ "$OAUTH_MECHANISM" = "serviceaccounttoken" ]; then
+            log_info "Executing: ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d --user oauth2accesstoken:*** $full_image_name"
             ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" \
                 --user "oauth2accesstoken:$ACCESS_TOKEN" "$full_image_name"
         else
             log_error "Unknown OAuth mechanism: $OAUTH_MECHANISM"
+            # Create error marker file
+            echo "$OAUTH_MECHANISM" > /tmp/image_pull_error_unknown_auth.flag
             exit 1
         fi
         
-        if [ $? -ne 0 ]; then
-            log_error "Failed to pull image: $full_image_name (from $image)"
+        local pull_result=$?
+        if [ $pull_result -ne 0 ]; then
+            log_error "Failed to pull image: $full_image_name (from $image) with exit code $pull_result"
+            # Create error marker file
+            echo "$full_image_name,$pull_result" > "/tmp/image_pull_error_${current}.flag"
             exit 1
+        else
+            log_success "Successfully pulled image: $full_image_name"
+            # Create success marker file
+            echo "$full_image_name" > "/tmp/image_pull_success_${current}.flag"
         fi
     done
     
+    # Create marker file to indicate all images were pulled successfully
+    touch /tmp/all_images_pulled.flag
     log_success "All images pulled successfully"
 }
 
