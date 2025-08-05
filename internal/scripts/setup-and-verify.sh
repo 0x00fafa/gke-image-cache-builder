@@ -477,18 +477,47 @@ pull_images() {
             continue
         fi
         
+        # Try to pull the image with detailed logging
+        local pull_cmd=""
         if [ "$OAUTH_MECHANISM" = "none" ]; then
-            log_info "Executing: ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
-            ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name"
+            log_info "Executing: /usr/local/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
+            pull_cmd="/usr/local/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
         elif [ "$OAUTH_MECHANISM" = "serviceaccounttoken" ]; then
-            log_info "Executing: ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d --user oauth2accesstoken:*** $full_image_name"
-            ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" \
-                --user "oauth2accesstoken:$ACCESS_TOKEN" "$full_image_name"
+            log_info "Executing: /usr/local/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d --user oauth2accesstoken:*** $full_image_name"
+            pull_cmd="/usr/local/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d --user oauth2accesstoken:$ACCESS_TOKEN $full_image_name"
         else
             log_error "Unknown OAuth mechanism: $OAUTH_MECHANISM"
             # Create error marker file
             echo "$OAUTH_MECHANISM" > /tmp/image_pull_error_unknown_auth.flag
             exit 1
+        fi
+        
+        # Execute the pull command with detailed error output
+        local pull_output=""
+        local pull_exit_code=0
+        pull_output=$($pull_cmd 2>&1) || pull_exit_code=$?
+        
+        if [ $pull_exit_code -ne 0 ]; then
+            log_error "Failed to pull image: $full_image_name with exit code $pull_exit_code"
+            log_error "Pull command output: $pull_output"
+            # Create error marker file with detailed info
+            echo "$full_image_name,$pull_exit_code,$pull_output" > "/tmp/image_pull_error_${current}.flag"
+            
+            # Try alternative paths for ctr
+            if [ "$OAUTH_MECHANISM" = "none" ]; then
+                log_info "Trying alternative path: /usr/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
+                /usr/bin/ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name" 2>&1 || true
+            elif [ "$OAUTH_MECHANISM" = "serviceaccounttoken" ]; then
+                log_info "Trying alternative path: /usr/bin/ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d --user oauth2accesstoken:*** $full_image_name"
+                /usr/bin/ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" --user "oauth2accesstoken:$ACCESS_TOKEN" "$full_image_name" 2>&1 || true
+            fi
+            
+            exit 1
+        else
+            log_success "Successfully pulled image: $full_image_name"
+            log_info "Pull command output: $pull_output"
+            # Create success marker file
+            echo "$full_image_name" > "/tmp/image_pull_success_${current}.flag"
         fi
         
         local pull_result=$?
