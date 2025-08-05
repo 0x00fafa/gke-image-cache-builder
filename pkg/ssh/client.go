@@ -10,10 +10,69 @@ import (
 	"strings"
 	"time"
 
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+
 	"golang.org/x/crypto/ssh"
 
 	"github.com/0x00fafa/gke-image-cache-builder/pkg/log"
 )
+
+// generateSSHKey generates a new SSH key pair
+func generateSSHKey(privateKeyPath string) error {
+	// Generate private key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// Marshal private key to PEM format
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+
+	// Write private key to file
+	privateKeyFile, err := os.Create(privateKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to create private key file: %w", err)
+	}
+	defer privateKeyFile.Close()
+
+	if err := pem.Encode(privateKeyFile, privateKeyPEM); err != nil {
+		return fmt.Errorf("failed to encode private key: %w", err)
+	}
+
+	// Set proper permissions for private key
+	if err := os.Chmod(privateKeyPath, 0600); err != nil {
+		return fmt.Errorf("failed to set private key permissions: %w", err)
+	}
+
+	// Generate public key
+	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to generate public key: %w", err)
+	}
+
+	// Marshal public key to authorized_keys format
+	publicKeyBytes := ssh.MarshalAuthorizedKey(publicKey)
+
+	// Write public key to file
+	publicKeyPath := privateKeyPath + ".pub"
+	publicKeyFile, err := os.Create(publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to create public key file: %w", err)
+	}
+	defer publicKeyFile.Close()
+
+	if _, err := publicKeyFile.Write(publicKeyBytes); err != nil {
+		return fmt.Errorf("failed to write public key: %w", err)
+	}
+
+	return nil
+}
 
 // Client handles SSH connections to remote instances
 type Client struct {
@@ -29,11 +88,13 @@ func NewClient(logger *log.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
+	sshDir := filepath.Join(homeDir, ".ssh")
+
 	// Check for private key files in order of preference
 	keyPaths := []string{
-		filepath.Join(homeDir, ".ssh", "id_rsa"),
-		filepath.Join(homeDir, ".ssh", "id_ecdsa"),
-		filepath.Join(homeDir, ".ssh", "id_ed25519"),
+		filepath.Join(sshDir, "id_rsa"),
+		filepath.Join(sshDir, "id_ecdsa"),
+		filepath.Join(sshDir, "id_ed25519"),
 	}
 
 	var keyPath string
@@ -44,8 +105,22 @@ func NewClient(logger *log.Logger) (*Client, error) {
 		}
 	}
 
+	// If no key found, generate a new one
 	if keyPath == "" {
-		return nil, fmt.Errorf("no SSH private key found in ~/.ssh/")
+		logger.Warn("No SSH private key found, generating a new one...")
+
+		// Ensure .ssh directory exists
+		if err := os.MkdirAll(sshDir, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create .ssh directory: %w", err)
+		}
+
+		// Generate new SSH key pair
+		keyPath = filepath.Join(sshDir, "id_rsa")
+		if err := generateSSHKey(keyPath); err != nil {
+			return nil, fmt.Errorf("failed to generate SSH key: %w", err)
+		}
+
+		logger.Info("Generated new SSH key pair")
 	}
 
 	// Read private key
