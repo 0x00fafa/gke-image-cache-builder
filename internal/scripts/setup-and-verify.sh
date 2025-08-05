@@ -432,16 +432,20 @@ pull_images() {
     
     # Check if we can list images (basic containerd functionality)
     echo "Checking containerd communication..." > /tmp/image_pull_containerd_comm_check.flag
-    if ! ctr -n k8s.io images ls >/dev/null 2>&1; then
+    if ! /usr/local/bin/ctr -n k8s.io images ls >/dev/null 2>&1; then
         log_error "Cannot communicate with containerd"
         echo "containerd_communication_error" > /tmp/image_pull_error_containerd.flag
-        ctr -n k8s.io images ls > /tmp/containerd_images_ls.log 2>&1
+        /usr/local/bin/ctr -n k8s.io images ls > /tmp/containerd_images_ls.log 2>&1
+        # Also try with full path to ctr
+        /usr/bin/ctr -n k8s.io images ls >> /tmp/containerd_images_ls.log 2>&1 2>&1
         exit 1
     fi
     
     # Log containerd version for debugging
     echo "Logging containerd version..." > /tmp/image_pull_containerd_version.flag
-    ctr version > /tmp/containerd_version.log 2>&1
+    /usr/local/bin/ctr version > /tmp/containerd_version.log 2>&1
+    # Also try with alternative path
+    /usr/bin/ctr version >> /tmp/containerd_version.log 2>&1 2>&1
     
     for image in "${images[@]}"; do
         ((current++))
