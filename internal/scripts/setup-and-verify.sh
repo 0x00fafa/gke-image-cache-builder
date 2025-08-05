@@ -420,15 +420,15 @@ pull_images() {
         
         # Ensure image name has proper registry prefix for Docker Hub images
         local full_image_name="$image"
-        if [[ "$image" != *"/"* && "$image" != *"."* ]]; then
-            # This looks like a Docker Hub image without registry prefix
-            full_image_name="docker.io/library/$image"
-        elif [[ "$image" != *"/"* && "$image" == *"."* ]]; then
-            # This looks like a registry without image path
-            full_image_name="$image/library"
-        elif [[ "$image" == *"/"* && "$image" != *"."* && "$image" != *":"* ]]; then
-            # This looks like a Docker Hub user image without registry prefix
-            full_image_name="docker.io/$image"
+        if [[ "$image" != *"."* ]]; then
+            # If no registry specified, assume it's Docker Hub
+            if [[ "$image" != *"/"* ]]; then
+                # Official Docker Hub image (e.g., nginx:latest -> docker.io/library/nginx:latest)
+                full_image_name="docker.io/library/$image"
+            else
+                # User/organization Docker Hub image (e.g., myuser/myapp:latest -> docker.io/myuser/myapp:latest)
+                full_image_name="docker.io/$image"
+            fi
         fi
         
         if [ "$OAUTH_MECHANISM" = "none" ]; then
