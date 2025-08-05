@@ -422,18 +422,26 @@ pull_images() {
     echo "Images to pull: ${images[*]}" > /tmp/image_pull_images_list.flag
     
     # Check if containerd is running
+    echo "Checking if containerd is running..." > /tmp/image_pull_containerd_check.flag
     if ! systemctl is-active --quiet containerd; then
         log_error "containerd is not running"
         echo "containerd_not_running" > /tmp/image_pull_error_containerd.flag
+        systemctl status containerd > /tmp/containerd_status.log 2>&1
         exit 1
     fi
     
     # Check if we can list images (basic containerd functionality)
+    echo "Checking containerd communication..." > /tmp/image_pull_containerd_comm_check.flag
     if ! ctr -n k8s.io images ls >/dev/null 2>&1; then
         log_error "Cannot communicate with containerd"
         echo "containerd_communication_error" > /tmp/image_pull_error_containerd.flag
+        ctr -n k8s.io images ls > /tmp/containerd_images_ls.log 2>&1
         exit 1
     fi
+    
+    # Log containerd version for debugging
+    echo "Logging containerd version..." > /tmp/image_pull_containerd_version.flag
+    ctr version > /tmp/containerd_version.log 2>&1
     
     for image in "${images[@]}"; do
         ((current++))
