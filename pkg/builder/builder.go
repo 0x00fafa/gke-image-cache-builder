@@ -43,9 +43,24 @@ func (b *Builder) BuildImageCache(ctx context.Context) error {
 	b.logger.Infof("Disk image name: %s", b.config.DiskImageName)
 	b.logger.Infof("Container images: %v", b.config.ContainerImages)
 
-	workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache, b.gcpClient)
-	if err := workflow.Execute(ctx); err != nil {
-		return fmt.Errorf("workflow execution failed: %w", err)
+	// Create a channel to signal when the build is done
+	buildDone := make(chan struct{})
+
+	// Start the build in a goroutine
+	var buildErr error
+	go func() {
+		defer close(buildDone)
+		workflow := NewWorkflow(b.config, b.logger, b.vmManager, b.diskManager, b.imageCache, b.gcpClient)
+		buildErr = workflow.Execute(ctx)
+	}()
+
+	// Wait for the build to complete
+	<-buildDone
+
+	if buildErr != nil {
+		// Even if the build failed, we still return the error
+		// The workflow should have scheduled cleanup
+		return fmt.Errorf("workflow execution failed: %w", buildErr)
 	}
 
 	b.logger.Success("Image cache build completed successfully")
