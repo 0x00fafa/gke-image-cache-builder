@@ -132,6 +132,33 @@ func (m *Manager) CreateVM(ctx context.Context, config *Config) (*Instance, erro
 		Value: &setupScript,
 	})
 
+	// Add startup script to initialize the system environment automatically
+	startupScript := `#!/bin/bash
+# Startup script to initialize the VM environment
+set -e
+
+# Download the setup script from metadata
+curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/setup-script > /tmp/setup-and-verify.sh
+chmod +x /tmp/setup-and-verify.sh
+
+# Run system setup
+/tmp/setup-and-verify.sh setup
+
+# Setup containerd
+/tmp/setup-and-verify.sh setup-containerd
+
+# Create a flag file to indicate environment is ready
+touch /tmp/environment_ready.flag
+echo "Environment setup completed." > /tmp/environment_ready.flag
+
+# Also create a more specific flag
+echo "Full environment is ready and containerd is running" > /tmp/containerd_ready.flag
+`
+	metadataItems = append(metadataItems, &compute.MetadataItems{
+		Key:   "startup-script",
+		Value: &startupScript,
+	})
+
 	instance := &compute.Instance{
 		Name:        config.Name,
 		MachineType: fmt.Sprintf("projects/%s/zones/%s/machineTypes/%s", m.gcpClient.ProjectName(), config.Zone, config.MachineType),

@@ -152,6 +152,14 @@ func NewClient(logger *log.Logger) (*Client, error) {
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Insecure but acceptable for this use case
 		Timeout:         30 * time.Second,
+		HostKeyAlgorithms: []string{
+			ssh.KeyAlgoRSA,
+			ssh.KeyAlgoDSA,
+			ssh.KeyAlgoECDSA256,
+			ssh.KeyAlgoECDSA384,
+			ssh.KeyAlgoECDSA521,
+			ssh.KeyAlgoED25519,
+		},
 	}
 
 	return &Client{
