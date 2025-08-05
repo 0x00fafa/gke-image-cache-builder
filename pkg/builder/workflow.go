@@ -322,10 +322,25 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 
 	// First, let's wait a bit for the VM to fully boot and start executing the startup script
 	w.logger.Info("⏳ Initial wait for VM to boot and start executing startup script...")
-	time.Sleep(120 * time.Second) // Increased to 2 minutes
+
+	// Wait for 5 minutes with progress updates
+	waitDuration := 5 * time.Minute
+	tickerDuration := 30 * time.Second
+	ticks := int(waitDuration / tickerDuration)
+
+	for i := 0; i < ticks; i++ {
+		// Show progress
+		progress := float64(i+1) / float64(ticks) * 100
+		w.logger.Infof("⏳ Waiting for VM startup... Progress: %.1f%% (%d/%d)", progress, i+1, ticks)
+
+		time.Sleep(tickerDuration)
+	}
+
+	w.logger.Info("⏳ Initial wait completed, checking for progress...")
 
 	// Track if we've seen any progress
 	seenProgress := false
+	seenEnvironmentReady := false
 
 	for {
 		select {
@@ -357,11 +372,17 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 				return nil
 			}
 
+			// Check specifically for environment ready flag
+			if strings.Contains(output, "environment_ready.flag") {
+				seenEnvironmentReady = true
+				w.logger.Info("✅ Environment ready flag detected")
+			}
+
 			// Check for progress indicators (temporary files created during execution)
-			if strings.Contains(output, "environment_ready.flag") ||
-				strings.Contains(output, "image_pull_started.flag") ||
+			if strings.Contains(output, "image_pull_started.flag") ||
 				strings.Contains(output, "Disk mounted successfully") ||
-				strings.Contains(output, "containerd is ready") {
+				strings.Contains(output, "containerd is ready") ||
+				strings.Contains(output, "containerd service is active") {
 				seenProgress = true
 				w.logger.Info("✅ Progress detected in remote environment setup")
 			}
@@ -373,8 +394,11 @@ func (w *Workflow) waitForRemoteEnvironment(ctx context.Context, instance *vm.In
 				return fmt.Errorf("remote environment setup failed")
 			}
 
-			// If we've seen progress but haven't completed yet, continue waiting
-			if seenProgress {
+			// If we've seen the environment ready flag, give it a bit more time to complete
+			if seenEnvironmentReady {
+				w.logger.Info("⏳ Environment ready flag detected, waiting for full completion...")
+			} else if seenProgress {
+				// If we've seen progress but haven't completed yet, continue waiting
 				w.logger.Info("⏳ Remote environment is making progress, waiting for completion...")
 			} else {
 				w.logger.Info("⏳ Remote environment is not ready yet, waiting...")
