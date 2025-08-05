@@ -244,17 +244,6 @@ chmod +x /tmp/setup-and-verify.sh
     
     echo "Starting full GKE Image Cache Builder workflow..."
     
-    # Execute setup (environment preparation)
-    /tmp/setup-and-verify.sh setup
-    
-    # Setup containerd
-    /tmp/setup-and-verify.sh setup-containerd
-    
-    echo "Environment setup completed."
-    
-    # Create a flag file to indicate environment is ready
-    touch /tmp/environment_ready.flag
-    
     # Wait for the disk to be attached by the main process
     echo "Waiting for disk to be attached..."
     for i in {1..60}; do  # Wait up to 5 minutes
@@ -275,13 +264,39 @@ chmod +x /tmp/setup-and-verify.sh
         exit 1
     fi
     
-    echo "Disk attached, starting image processing..."
+    # Mount the disk first
+    echo "Mounting disk..."
+    /tmp/setup-and-verify.sh prepare-disk secondary-disk-image-disk
     
-    # Wait a bit more for containerd to be fully ready
+    # Execute setup (environment preparation)
+    /tmp/setup-and-verify.sh setup
+    
+    # Setup containerd
+    /tmp/setup-and-verify.sh setup-containerd
+    
+    echo "Environment setup completed."
+    
+    # Create a flag file to indicate environment is ready
+    touch /tmp/environment_ready.flag
+    
+    echo "Disk mounted and environment ready, starting image processing..."
+    
+    # Wait for containerd to be fully ready
+    echo "Waiting for containerd to be ready..."
+    for i in {1..60}; do  # Wait up to 5 minutes
+        if systemctl is-active --quiet containerd && ctr version | grep -q "Server:"; then
+            echo "containerd is ready"
+            break
+        fi
+        echo "Waiting for containerd to be ready... ($i/60)"
+        sleep 5
+    done
+    
+    # Additional wait to ensure containerd is fully initialized
     sleep 30
     
-    # Execute the full workflow
-    /tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + authMechanism + ` true ` + images + `
+    # Execute the image processing
+    /tmp/setup-and-verify.sh pull-images ` + authMechanism + ` true ` + images + `
     
     echo "Unpacking is completed."
     

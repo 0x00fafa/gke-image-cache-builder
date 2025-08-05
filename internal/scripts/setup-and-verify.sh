@@ -416,6 +416,10 @@ pull_images() {
     
     # Create marker file to indicate we're starting image pulling
     touch /tmp/image_pull_started.flag
+    echo "Started at $(date)" > /tmp/image_pull_started.flag
+    
+    # Log the images we're going to pull
+    echo "Images to pull: ${images[*]}" > /tmp/image_pull_images_list.flag
     
     # Check if containerd is running
     if ! systemctl is-active --quiet containerd; then
