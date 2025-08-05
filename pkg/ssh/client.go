@@ -107,7 +107,16 @@ func NewClient(logger *log.Logger) (*Client, error) {
 
 	// If no key found, generate a new one
 	if keyPath == "" {
-		logger.Warn("No SSH private key found, generating a new one...")
+		logger.Warn("No SSH private key found, need to generate a new one...")
+
+		// Ask for user confirmation before generating
+		fmt.Print("No SSH key found. Would you like to generate a new SSH key pair? (y/n): ")
+		var response string
+		fmt.Scanln(&response)
+
+		if response != "y" && response != "yes" && response != "Y" && response != "YES" {
+			return nil, fmt.Errorf("SSH key generation cancelled by user")
+		}
 
 		// Ensure .ssh directory exists
 		if err := os.MkdirAll(sshDir, 0700); err != nil {
