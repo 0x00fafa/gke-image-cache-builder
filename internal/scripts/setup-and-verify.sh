@@ -417,6 +417,20 @@ pull_images() {
     # Create marker file to indicate we're starting image pulling
     touch /tmp/image_pull_started.flag
     
+    # Check if containerd is running
+    if ! systemctl is-active --quiet containerd; then
+        log_error "containerd is not running"
+        echo "containerd_not_running" > /tmp/image_pull_error_containerd.flag
+        exit 1
+    fi
+    
+    # Check if we can list images (basic containerd functionality)
+    if ! ctr -n k8s.io images ls >/dev/null 2>&1; then
+        log_error "Cannot communicate with containerd"
+        echo "containerd_communication_error" > /tmp/image_pull_error_containerd.flag
+        exit 1
+    fi
+    
     for image in "${images[@]}"; do
         ((current++))
         log_progress "$current" "$total" "Pulling $image"
@@ -440,6 +454,13 @@ pull_images() {
         # Log the full image name we're pulling
         log_info "Pulling full image name: $full_image_name"
         
+        # Check if image is already pulled
+        if ctr -n k8s.io images ls | grep -q "$full_image_name"; then
+            log_info "Image $full_image_name already exists, skipping pull"
+            echo "$full_image_name" > "/tmp/image_pull_success_${current}.flag"
+            continue
+        fi
+        
         if [ "$OAUTH_MECHANISM" = "none" ]; then
             log_info "Executing: ctr -n k8s.io image pull --hosts-dir /etc/containerd/certs.d $full_image_name"
             ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name"
@@ -459,6 +480,8 @@ pull_images() {
             log_error "Failed to pull image: $full_image_name (from $image) with exit code $pull_result"
             # Create error marker file
             echo "$full_image_name,$pull_result" > "/tmp/image_pull_error_${current}.flag"
+            # Try to get more detailed error information
+            ctr -n k8s.io image pull --hosts-dir "/etc/containerd/certs.d" "$full_image_name" 2>&1 | tee "/tmp/image_pull_detailed_error_${current}.log"
             exit 1
         else
             log_success "Successfully pulled image: $full_image_name"
