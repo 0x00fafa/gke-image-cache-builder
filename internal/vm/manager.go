@@ -209,6 +209,18 @@ func (m *Manager) ValidatePermissions(ctx context.Context, projectName, zone str
 
 // generateStartupScript generates the startup script for remote VM
 func (m *Manager) generateStartupScript(config *Config) string {
+	// Prepare the image list
+	images := "nginx:latest" // Default fallback
+	if len(config.ContainerImages) > 0 {
+		images = strings.Join(config.ContainerImages, " ")
+	}
+
+	// Prepare the auth mechanism
+	authMechanism := "none"
+	if config.ImagePullAuth != "" {
+		authMechanism = config.ImagePullAuth
+	}
+
 	script := `#!/bin/bash
 set -e
 
@@ -235,6 +247,19 @@ echo "Environment setup completed."
 
 # Create a flag file to indicate environment is ready
 touch /tmp/environment_ready.flag
+
+# Wait for the disk to be attached by the main process
+echo "Waiting for disk to be attached..."
+while [ ! -b /dev/disk/by-id/google-secondary-disk-image-disk ]; do
+  sleep 5
+done
+
+echo "Disk attached, starting image processing..."
+
+# Execute the full workflow
+/tmp/setup-and-verify.sh full-workflow secondary-disk-image-disk ` + authMechanism + ` true ` + images + `
+
+echo "Unpacking is completed."
 
 echo "Setup completed successfully"
 `
