@@ -478,7 +478,7 @@ func (w *Workflow) executeRemoteImageProcessing(ctx context.Context, resources *
 	}
 
 	// First, we need to get the setup script from the VM metadata and save it to /tmp/setup-and-verify.sh
-	setupScriptCmd := "curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/attributes/setup-script > /tmp/setup-and-verify.sh && chmod +x /tmp/setup-and-verify.sh"
+	setupScriptCmd := "curl -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/attributes/setup-script > /tmp/setup-and-verify.sh && chmod 755 /tmp/setup-and-verify.sh"
 
 	w.logger.Info("Downloading setup script to remote VM...")
 	output, err := w.sshClient.ExecuteCommandWithProgress(ctx, publicIP, setupScriptCmd, func(progress string) {
